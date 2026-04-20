@@ -845,53 +845,53 @@ body * {
 #zoom-overlay #page-charitystream .content-box,
 #zoom-overlay #page-trails .content-box {
   width: 60vw;
-  max-height: none;
-  padding: 28px 36px;
-  overflow: visible;
+  max-height: 82vh;
+  padding: 22px 30px;
+  overflow-y: auto;
 }
 
 #zoom-overlay #page-charitystream .content-header-img,
 #zoom-overlay #page-trails .content-header-img {
-  max-height: 120px;
+  max-height: 95px;
   width: auto;
   max-width: 55%;
-  margin: 0 auto 20px;
+  margin: 0 auto 16px;
   display: block;
 }
 
 #zoom-overlay #page-charitystream .content-text > p:not(.charitystream-stack),
 #zoom-overlay #page-trails .content-text > p:not(.charitystream-stack) {
-  font-size: 1.25rem;
-  line-height: 1.75;
+  font-size: 1.1rem;
+  line-height: 1.65;
   text-align: left;
 }
 
 #zoom-overlay #page-charitystream .content-text h3,
 #zoom-overlay #page-trails .content-text h3 {
-  font-size: 1.65rem;
+  font-size: 1.5rem;
   text-align: center;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.25rem;
 }
 
 #zoom-overlay #page-charitystream .charitystream-subtitle,
 #zoom-overlay #page-trails .charitystream-subtitle {
-  font-size: 1.05rem;
+  font-size: 0.96rem;
   text-align: center;
-  margin-bottom: 1.2rem;
+  margin-bottom: 1rem;
 }
 
 #zoom-overlay #page-charitystream .charitystream-points,
 #zoom-overlay #page-trails .charitystream-points {
-  margin: 1rem 0 1.2rem 1.4rem;
+  margin: 0.75rem 0 1rem 1.3rem;
   padding: 0;
 }
 
 #zoom-overlay #page-charitystream .charitystream-points li,
 #zoom-overlay #page-trails .charitystream-points li {
-  font-size: 1rem;
+  font-size: 0.93rem;
   line-height: 1.55;
   color: rgba(255,255,255,0.82);
-  margin-bottom: 0.55rem;
+  margin-bottom: 0.48rem;
 }
 
 #zoom-overlay #page-charitystream .charitystream-points li:last-child,
@@ -901,8 +901,8 @@ body * {
 
 #zoom-overlay #page-charitystream .charitystream-stack,
 #zoom-overlay #page-trails .charitystream-stack {
-  font-size: 1rem;
-  line-height: 1.7;
+  font-size: 0.9rem;
+  line-height: 1.65;
   letter-spacing: 0.01em;
   text-align: left;
   color: rgba(255,255,255,0.62);
@@ -922,16 +922,16 @@ body * {
 
 #zoom-overlay #page-metaclips .content-box {
   width: 66vw;
-  max-height: none;
-  padding: 28px 36px;
-  overflow: visible;
+  max-height: 82vh;
+  padding: 22px 30px;
+  overflow-y: auto;
 }
 
 #zoom-overlay #page-metaclips .content-header-img {
-  max-height: 120px;
+  max-height: 95px;
   width: auto;
   max-width: 55%;
-  margin: 0 auto 18px;
+  margin: 0 auto 16px;
   display: block;
 }
 
@@ -940,15 +940,15 @@ body * {
 }
 
 #zoom-overlay #page-metaclips .content-text h3 {
-  font-size: 1.65rem;
+  font-size: 1.5rem;
   text-align: center;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.25rem;
 }
 
 #zoom-overlay #page-metaclips .metaclips-subtitle {
-  font-size: 1.05rem;
+  font-size: 0.96rem;
   text-align: center;
-  margin-bottom: 1.2rem;
+  margin-bottom: 1rem;
 }
 
 #zoom-overlay #page-metaclips .content-text p {
@@ -958,15 +958,15 @@ body * {
 }
 
 #zoom-overlay #page-metaclips .metaclips-points {
-  margin: 1rem 0 1.2rem 1.4rem;
+  margin: 0.75rem 0 1rem 1.3rem;
   padding: 0;
 }
 
 #zoom-overlay #page-metaclips .metaclips-points li {
-  font-size: 1rem;
+  font-size: 0.93rem;
   line-height: 1.55;
   color: rgba(255,255,255,0.82);
-  margin-bottom: 0.55rem;
+  margin-bottom: 0.48rem;
 }
 
 #zoom-overlay #page-metaclips .metaclips-points li:last-child {
@@ -974,8 +974,8 @@ body * {
 }
 
 #zoom-overlay #page-metaclips .metaclips-stack {
-  font-size: 0.68rem;
-  line-height: 1.7;
+  font-size: 0.9rem;
+  line-height: 1.65;
   letter-spacing: 0.01em;
   text-align: left;
   color: rgba(255,255,255,0.62);
