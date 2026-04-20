@@ -1,0 +1,1008 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Helvetica, Arial, sans-serif;
+}
+
+html {
+  background: #000;
+}
+
+#debug-centerline {
+  display: none; /* controlled by SHOW_CENTER_LINE in index.html */
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 100vh;
+  background: red;
+  z-index: 99999;
+  pointer-events: none;
+}
+
+body {
+  position: relative;
+  background: #000;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body,
+body * {
+  cursor: url('assets/cursor.png') 0 0, auto;
+}
+
+
+/* ---------- SHADER CANVAS ---------- */
+
+#shader-bg {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  display: block;
+  filter: blur(3px) brightness(0.75);
+  opacity: 0;
+  will-change: opacity;
+  transition: opacity 2s ease-in;
+}
+
+/* ---------- INTRO VIDEO ---------- */
+
+#intro {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: #000;
+}
+
+#intro video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+#intro.fade-out {
+  animation: choppyFadeOut 0.6s steps(10, end) forwards;
+}
+
+/* ---------- CONTROLS LEGEND (viewport-fixed — stays above tab / zoom UI) ---------- */
+
+.controls-legend {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 18px;
+  pointer-events: none;
+
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.88);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.85), 0 0 1px rgba(0, 0, 0, 0.9);
+}
+
+.controls-legend__left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.controls-legend__audio {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0.92;
+  transition: opacity 0.18s ease;
+}
+
+.controls-legend__audio:hover {
+  opacity: 1;
+}
+
+.controls-legend__audio:focus-visible {
+  outline: 1px solid rgba(255,255,255,0.7);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.controls-legend__audio-icon {
+  width: 27px;
+  height: 27px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.6));
+}
+
+.controls-legend__audio-icon--off {
+  display: none;
+}
+
+.controls-legend__audio.is-muted .controls-legend__audio-icon--on {
+  display: none;
+}
+
+.controls-legend__audio.is-muted .controls-legend__audio-icon--off {
+  display: block;
+}
+
+.controls-legend__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.controls-legend__right img {
+  display: block;
+  height: 42px;
+  width: auto;
+  object-fit: contain;
+  opacity: 0.92;
+  filter: invert(1) drop-shadow(0 1px 6px rgba(0, 0, 0, 0.6));
+}
+
+/* ---------- PHONE ---------- */
+
+#phone-container {
+  position: relative;
+  display: inline-block;
+  opacity: 0;
+  z-index: 1;
+  overflow: visible;
+  will-change: opacity;        /* pre-promote to compositor layer — no stutter on fade start */
+  transition: opacity 1.2s ease-in;
+}
+
+#click-to-begin {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 0;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+#click-to-begin.visible {
+  opacity: 1;
+}
+
+#click-to-begin.hidden {
+  opacity: 0;
+}
+
+#click-to-begin-text {
+  position: fixed;
+  bottom: 50px; /* pixels from bottom edge — decrease to move down, negative values push it off-screen */
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255,255,255,0.75);
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  animation: ctbPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes ctbPulse {
+  0%, 100% { opacity: 0.55; }
+  50%       { opacity: 1;    }
+}
+
+/* Intro fade — opacity transition defined on #phone-container above; class triggers it */
+#phone-container.fade-in {
+  opacity: 1;
+}
+
+#phone-float-wrap {
+  position: relative;
+  display: inline-block;
+  transform-origin: center center;
+  will-change: transform;
+  overflow: visible;
+}
+
+#phone-container.fade-in #phone-float-wrap {
+  animation: phoneFloat 18s ease-in-out 0.65s infinite;
+}
+
+@keyframes phoneFloat {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(0.22cm, -0.2cm); }
+  40% { transform: translate(-0.2cm, 0.22cm); }
+  60% { transform: translate(0.18cm, 0.2cm); }
+  80% { transform: translate(-0.22cm, -0.16cm); }
+}
+
+/* Freeze drift while zoomed — pause timeline so position resumes after exit (no snap to center) */
+#phone-container.fade-in #phone-float-wrap.float-paused {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #phone-container.fade-in #phone-float-wrap {
+    animation: none;
+  }
+}
+
+#phone-img {
+  height: 85vh;
+  width: auto;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.4s ease-in-out;
+}
+
+#phone-3d-container {
+  height: 80vh;
+  aspect-ratio: 3000 / 1000;
+  position: relative;
+  z-index: 1;
+  overflow: visible;
+}
+
+/* Canvas is larger than the container so tilted model isn't clipped at the edges.
+   Centered over the container via absolute positioning — phone size is unchanged
+   because camera auto-fit still uses the container's client dimensions. */
+#phone-3d-container canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: block;
+}
+
+/* Screen overlay — percentages relative to blackberry.png (939×1600)
+   TL: (86, 291)  BR: (848, 864) */
+#phone-screen {
+  position: absolute;
+  left: 8.2%;
+  top: 17.3%;
+  width: 83.2%;
+  height: 37.4%;
+  background: #000;
+  overflow: hidden;
+  border-radius: 4px;
+  transform-origin: top left;
+  transition: transform 0.4s ease-in-out;
+  -webkit-mask-image:
+    linear-gradient(to right,  transparent 0%, black 3%, black 97%, transparent 100%),
+    linear-gradient(to bottom, transparent 0%, black 3%, black 97%, transparent 100%);
+  -webkit-mask-composite: destination-in;
+  mask-image:
+    linear-gradient(to right,  transparent 0%, black 3%, black 97%, transparent 100%),
+    linear-gradient(to bottom, transparent 0%, black 3%, black 97%, transparent 100%);
+  mask-composite: intersect;
+}
+
+
+/* Remove edge fade and radius when fully zoomed */
+#phone-screen.zoomed {
+  border-radius: 0;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+#zoom-label {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.75);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+  z-index: 6;
+  white-space: nowrap;
+}
+#zoom-label-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  filter: opacity(0.75);
+  flex-shrink: 0;
+}
+
+#zoom-label.visible {
+  opacity: 1;
+}
+
+/* WebGL canvas sits behind icons */
+#phone-screen canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* ---------- TAB NAV ICONS ---------- */
+
+/* Clipping window — shows exactly 3 slots */
+#icon-track-wrapper {
+  z-index: 1;
+  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 270px;   /* 3 × 90px slots */
+  overflow: hidden;
+}
+
+/* Nav slides DOWN when Social sub-menu is open */
+#icon-track-wrapper.nav-exited {
+  transform: translate(-50%, calc(-50% + 150px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Nav slides UP when Projects sub-menu is open */
+#icon-track-wrapper.nav-exited-up {
+  transform: translate(-50%, calc(-50% - 150px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Projects floating title */
+#projects-title {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  /* resting position matches approximate nav-label location */
+  transform: translateX(-50%) translateY(80px);
+
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+  transition:
+    transform  0.3s ease-in-out,
+    font-size  0.3s ease-in-out,
+    color      0.3s ease-in-out,
+    opacity    0.3s ease-in-out;
+}
+#projects-title.title-raised {
+  transform: translateX(-50%) translateY(0);
+  font-size: 11px;
+  color: rgba(255,255,255,0.85);
+  opacity: 1;
+}
+
+/* Sub-menu anchors */
+#projects-subwrap,
+#social-subwrap {
+  top: 48%;
+}
+
+/* Socials floating title — identical behaviour to projects-title */
+#socials-title {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  transform: translateX(-50%) translateY(80px);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+  transition:
+    transform  0.3s ease-in-out,
+    font-size  0.3s ease-in-out,
+    color      0.3s ease-in-out,
+    opacity    0.3s ease-in-out;
+}
+#socials-title.title-raised {
+  transform: translateX(-50%) translateY(0);
+  font-size: 11px;
+  color: rgba(255,255,255,0.85);
+  opacity: 1;
+}
+
+/* 5-slot track — only 3 visible at a time */
+#icon-track {
+  display: flex;
+  align-items: center;
+  width: 450px;   /* 5 × 90px slots */
+  transform: translateX(-90px); /* rest position: slots [1,2,3] visible */
+}
+
+
+.track-slot {
+  width: 90px;
+  flex-shrink: 0;
+  /* Fixed icon row height so labels line up even when projects icon is 94px */
+  display: grid;
+  grid-template-rows: 94px auto;
+  align-items: center;
+  justify-items: center;
+  row-gap: 6px;
+  position: relative;
+  transition: transform 0.38s ease;
+}
+
+
+.slot-label {
+
+  font-size: 8px;
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap;
+  transition: color 0.22s ease, text-shadow 0.22s ease;
+}
+
+.track-slot.active .slot-label {
+  color: #fff;
+  text-shadow: 0 0 6px rgba(255,255,255,0.95), 0 0 14px rgba(255,255,255,0.6);
+}
+
+/* Freeze transitions during snap so right slot doesn't flash */
+#icon-track.snapping .track-slot > img,
+#icon-track.snapping .track-slot .slot-label {
+  transition: none !important;
+}
+
+/* Main nav icons only (not Projects sub-icons inside .project-sub-slot) */
+.track-slot > img {
+  grid-row: 1;
+  align-self: center;
+  display: block;
+  width: 42px;
+  height: 42px;
+  position: relative; /* sits above ::before */
+  filter: grayscale(65%) opacity(0.55);
+  transition: width 0.22s ease, height 0.22s ease, filter 0.22s ease;
+}
+
+.track-slot > .slot-label {
+  grid-row: 2;
+}
+
+.track-slot.active > img {
+  width: 68px;
+  height: 68px;
+  filter: none;
+}
+
+/* projects icon slightly larger when active */
+.track-slot.active > img[data-tab="projects"] {
+  width: 94px;
+  height: 94px;
+}
+
+/* ── Sub-menu: zero-size anchor centered in phone screen ── */
+.sub-menu {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  z-index: 4;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.sub-menu[hidden]       { display: none !important; }
+.sub-menu:not([hidden]) { display: block; pointer-events: auto; }
+
+/* ── Individual sub-slot items — JS controls translateY ── */
+.sub-slot-item {
+  position: absolute;
+  width: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  /* transition applied when entering; JS removes and re-applies as needed */
+  transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+.sub-slot-item img {
+  display: block;
+  width: 42px;
+  height: 42px;
+  filter: grayscale(65%) opacity(0.55);
+  transition: width 0.22s ease, height 0.22s ease, filter 0.22s ease;
+}
+
+.sub-slot-item.active img {
+  width: 68px;
+  height: 68px;
+  filter: none;
+}
+
+/* LinkedIn asset has extra whitespace — bump size and ensure it fills the box */
+#social-subwrap .sub-slot-item[data-action="linkedin"].active img {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+}
+
+.sub-slot-label {
+
+  font-size: 8px;
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap;
+  transition: color 0.22s ease, text-shadow 0.22s ease;
+}
+
+.sub-slot-item.active .sub-slot-label {
+  color: #fff;
+  text-shadow: 0 0 6px rgba(255,255,255,0.95), 0 0 14px rgba(255,255,255,0.6);
+}
+
+/* ---------- ANIMATIONS ---------- */
+
+@keyframes choppyFadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+
+/* ---------- CONTENT PAGES ---------- */
+
+#content-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.content-page {
+  display: none;
+  position: absolute;
+  inset: 0;
+  padding: 10px;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+}
+
+.content-page.active {
+  display: flex;
+}
+
+/* Box fades in after 150ms delay (background visible first) */
+.content-page.active .content-box {
+  animation: contentBoxIn 0.2s ease 0.15s both;
+}
+
+/* Side images wrapper (About) fades in with the box */
+.content-page.active .content-side-imgs {
+  animation: contentBoxIn 0.2s ease 0.15s both;
+}
+
+/* Header image inside box */
+.content-page.active .content-header-img {
+  animation: contentTextIn 0.18s ease 0.26s both;
+}
+
+/* Text fades in slightly after the box */
+.content-page.active .content-text {
+  animation: contentTextIn 0.2s ease 0.3s both;
+}
+
+@keyframes contentBoxIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes contentTextIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.content-box {
+  background: rgba(30, 30, 30, 0.93);
+  border-radius: 8px;
+  padding: 10px 12px;
+  max-height: 88%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.content-box::-webkit-scrollbar { display: none; }
+
+/* Full-width variant for charitystream / skills */
+.content-box--wide { width: 90%; }
+
+/* About: text box left, images right */
+#page-about {
+  flex-direction: row;
+  align-items: flex-start;
+  padding-top: 12px;
+}
+#page-about .content-box {
+  flex: 1;
+  max-width: 62%;
+  padding: 8px 10px;
+}
+#page-about .content-text p,
+#page-skills .content-text p {
+  font-size: 6px;
+  line-height: 1.65;
+}
+
+/* Slightly tighter copy so the full blurb fits without scrolling */
+#page-charitystream .content-text p {
+  font-size: 5.25px;
+  line-height: 1.45;
+}
+
+
+
+.content-side-imgs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.content-side-img {
+  width: 58px;
+  height: auto;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.content-header-img {
+  display: block;
+  width: 100%;
+  max-height: 36px;
+  object-fit: contain;
+  margin-bottom: 8px;
+}
+
+#page-charitystream .content-header-img {
+  max-height: 48px;
+  margin-bottom: 6px;
+}
+
+/* Keep box fully on-screen and clear of bottom zoom label (projects title) */
+#page-charitystream {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 8px 48px;
+  padding-top: 10px;
+  box-sizing: border-box;
+}
+
+#page-charitystream .content-box {
+  margin-top: 0;
+  width: 95%;
+  max-height: none;
+  overflow: visible;
+  padding: 7px 9px;
+  flex-shrink: 0;
+}
+
+.content-text p {
+
+  font-size: 7.5px;
+  color: rgba(255,255,255,0.82);
+  line-height: 1.65;
+  margin: 0;
+}
+
+.content-text h3,
+.content-text h4 {
+
+  font-size: 8px;
+  color: #fff;
+  margin: 7px 0 3px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.content-text h3:first-child,
+.content-text h4:first-child {
+  margin-top: 0;
+}
+
+#zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.35s ease;
+}
+
+#zoom-overlay.fading-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#zoom-overlay .content-page {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: all;
+}
+
+#zoom-overlay .content-page.active {
+  display: flex;
+}
+
+#zoom-overlay .content-text p {
+  font-size: 1.15rem;
+  line-height: 1.7;
+}
+
+#zoom-overlay .content-text h4 {
+  font-size: 1.25rem;
+}
+
+#zoom-overlay #page-about {
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  padding: 4vh 6vw;
+  box-sizing: border-box;
+}
+
+#zoom-overlay #page-about.active {
+  display: flex;
+}
+
+#zoom-overlay #page-about .content-box {
+  width: 55vw;
+  flex-shrink: 0;
+  padding: 20px 28px;
+  display: flex;
+  align-items: center;
+  max-height: none;
+}
+
+#zoom-overlay #page-about .content-text {
+  width: 100%;
+}
+
+#zoom-overlay #page-about .content-text p {
+  text-align: left;
+  text-indent: 2rem;
+  font-size: 1.3rem;
+  line-height: 1.75;
+  margin-bottom: 1.25rem;
+}
+
+#zoom-overlay #page-about .content-text p:last-child {
+  margin-bottom: 0;
+}
+
+#zoom-overlay #page-about .content-side-imgs {
+  gap: 20px;
+  justify-content: flex-start;
+  flex-shrink: 0;
+}
+
+#zoom-overlay #page-about .content-side-img {
+  width: 220px;
+  height: auto;
+}
+
+#zoom-overlay #page-charitystream {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8vh 8vw 6vh;
+  box-sizing: border-box;
+  gap: 2rem;
+}
+
+#zoom-overlay #page-charitystream.active,
+#zoom-overlay #page-trails.active {
+  display: flex;
+}
+
+#zoom-overlay #page-charitystream .content-box,
+#zoom-overlay #page-trails .content-box {
+  width: 60vw;
+  max-height: none;
+  padding: 28px 36px;
+  overflow: visible;
+}
+
+#zoom-overlay #page-charitystream .content-header-img,
+#zoom-overlay #page-trails .content-header-img {
+  max-height: 120px;
+  width: auto;
+  max-width: 55%;
+  margin: 0 auto 20px;
+  display: block;
+}
+
+#zoom-overlay #page-charitystream .content-text > p:not(.charitystream-stack),
+#zoom-overlay #page-trails .content-text > p:not(.charitystream-stack) {
+  font-size: 1.25rem;
+  line-height: 1.75;
+  text-align: left;
+}
+
+#zoom-overlay #page-charitystream .content-text h3,
+#zoom-overlay #page-trails .content-text h3 {
+  font-size: 1.65rem;
+  text-align: center;
+  margin-bottom: 0.3rem;
+}
+
+#zoom-overlay #page-charitystream .charitystream-subtitle,
+#zoom-overlay #page-trails .charitystream-subtitle {
+  font-size: 1.05rem;
+  text-align: center;
+  margin-bottom: 1.2rem;
+}
+
+#zoom-overlay #page-charitystream .charitystream-points,
+#zoom-overlay #page-trails .charitystream-points {
+  margin: 1rem 0 1.2rem 1.4rem;
+  padding: 0;
+}
+
+#zoom-overlay #page-charitystream .charitystream-points li,
+#zoom-overlay #page-trails .charitystream-points li {
+  font-size: 1rem;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.82);
+  margin-bottom: 0.55rem;
+}
+
+#zoom-overlay #page-charitystream .charitystream-points li:last-child,
+#zoom-overlay #page-trails .charitystream-points li:last-child {
+  margin-bottom: 0;
+}
+
+#zoom-overlay #page-charitystream .charitystream-stack,
+#zoom-overlay #page-trails .charitystream-stack {
+  font-size: 1rem;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  text-align: left;
+  color: rgba(255,255,255,0.62);
+}
+
+#zoom-overlay #page-metaclips {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 8px 48px;
+  box-sizing: border-box;
+}
+
+#zoom-overlay #page-metaclips.active {
+  display: flex;
+}
+
+#zoom-overlay #page-metaclips .content-box {
+  width: 66vw;
+  max-height: none;
+  padding: 28px 36px;
+  overflow: visible;
+}
+
+#zoom-overlay #page-metaclips .content-header-img {
+  max-height: 120px;
+  width: auto;
+  max-width: 55%;
+  margin: 0 auto 18px;
+  display: block;
+}
+
+#zoom-overlay #page-metaclips .content-text {
+  text-align: left;
+}
+
+#zoom-overlay #page-metaclips .content-text h3 {
+  font-size: 1.65rem;
+  text-align: center;
+  margin-bottom: 0.3rem;
+}
+
+#zoom-overlay #page-metaclips .metaclips-subtitle {
+  font-size: 1.05rem;
+  text-align: center;
+  margin-bottom: 1.2rem;
+}
+
+#zoom-overlay #page-metaclips .content-text p {
+  font-size: 1.1rem;
+  line-height: 1.65;
+  text-align: left;
+}
+
+#zoom-overlay #page-metaclips .metaclips-points {
+  margin: 1rem 0 1.2rem 1.4rem;
+  padding: 0;
+}
+
+#zoom-overlay #page-metaclips .metaclips-points li {
+  font-size: 1rem;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.82);
+  margin-bottom: 0.55rem;
+}
+
+#zoom-overlay #page-metaclips .metaclips-points li:last-child {
+  margin-bottom: 0;
+}
+
+#zoom-overlay #page-metaclips .metaclips-stack {
+  font-size: 0.68rem;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  text-align: left;
+  color: rgba(255,255,255,0.62);
+}
+
+.skills-icons {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.skill-icon {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  opacity: 0;
+  animation: skillIconFadeIn 0.4s ease forwards;
+}
+
+.skill-icon:nth-child(1) { animation-delay: 0.1s; }
+.skill-icon:nth-child(2) { animation-delay: 0.25s; }
+.skill-icon:nth-child(3) { animation-delay: 0.4s; }
+.skill-icon:nth-child(4) { animation-delay: 0.55s; }
+
+@keyframes skillIconFadeIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}

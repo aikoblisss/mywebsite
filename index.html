@@ -1,0 +1,2250 @@
+<!DOCTYPE html>
+<html lang="en" style="background:#000">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <title>Branden Greene</title>
+
+  <link rel="stylesheet" href="style.css">
+  <!-- Preload the GLB so it's in the browser cache before Three.js requests it -->
+  <link rel="preload" href="assets/phone.glb" as="fetch" crossorigin>
+
+  <!-- ── THREE.JS IMPORT MAP ─────────────────────────────────────────────── -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three":          "https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js",
+      "three/addons/":  "https://cdn.jsdelivr.net/npm/three@0.167.0/examples/jsm/"
+    }
+  }
+  </script>
+  <!-- ── / THREE.JS IMPORT MAP ────────────────────────────────────────────── -->
+</head>
+<body>
+
+  <canvas id="shader-bg"></canvas>
+
+  <div id="intro">
+    <video id="intro-video" autoplay muted playsinline>
+      <source src="assets/welcome.mp4" type="video/mp4">
+    </video>
+  </div>
+
+  <div id="debug-centerline"></div>
+
+  <div id="click-to-begin">
+    <span id="click-to-begin-text">click phone to begin</span>
+  </div>
+
+  <aside class="controls-legend" aria-label="Keyboard controls">
+    <div class="controls-legend__left">
+      <span>esc: exit</span>
+      <span>enter: select</span>
+      <button type="button" id="ambience-toggle" class="controls-legend__audio" aria-label="Mute sound" aria-pressed="false">
+        <svg class="controls-legend__audio-icon controls-legend__audio-icon--on" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 9h4l5-4v14l-5-4H4z"></path>
+          <path d="M16 9.5a4.5 4.5 0 0 1 0 5"></path>
+          <path d="M18.5 7a8 8 0 0 1 0 10"></path>
+        </svg>
+        <svg class="controls-legend__audio-icon controls-legend__audio-icon--off" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 9h4l5-4v14l-5-4H4z"></path>
+          <path d="M16.5 9.5 21 14"></path>
+          <path d="M21 9.5 16.5 14"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="controls-legend__right">
+      <img src="assets/keys.png" alt="">
+      <span>navigate</span>
+    </div>
+  </aside>
+
+  <div id="phone-container">
+    <div id="phone-float-wrap" class="float-paused">
+    <!-- ── ORIGINAL PHONE MARKUP — hidden while 3D model is active ────────────
+         To restore: remove the 'hidden' attribute from #phone-original-markup  -->
+    <div hidden id="phone-original-markup">
+    <img src="assets/blackberry.png" alt="" id="phone-img" draggable="false">
+    <div id="phone-screen">
+      <div id="icon-track-wrapper">
+        <div id="icon-track">
+          <div class="track-slot" id="tslot-0"><img src="" alt=""><span class="slot-label"></span></div>
+          <div class="track-slot" id="tslot-1"><img src="" alt=""><span class="slot-label"></span></div>
+          <div class="track-slot active" id="tslot-2">
+            <img src="" alt=""><span class="slot-label"></span>
+          </div>
+          <div class="track-slot" id="tslot-3"><img src="" alt=""><span class="slot-label"></span></div>
+          <div class="track-slot" id="tslot-4"><img src="" alt=""><span class="slot-label"></span></div>
+        </div>
+      </div>
+      <div id="zoom-label"><img id="zoom-label-icon" alt="" style="display:none"><span id="zoom-label-text"></span></div>
+
+      <!-- Floating titles — start at nav-label position, float to top on dropdown open -->
+      <div id="projects-title">projects</div>
+      <div id="socials-title">my socials</div>
+
+      <!-- Sub-menus (direct children of phone-screen, positioned absolutely) -->
+      <div id="projects-subwrap" class="sub-menu" hidden>
+        <div class="sub-slot-item" data-action="charitystream">
+          <img src="assets/charitystreamicon.png" alt="">
+          <span class="sub-slot-label">CharityStream</span>
+        </div>
+        <div class="sub-slot-item" data-action="trails">
+          <img src="assets/trails.png" alt="">
+          <span class="sub-slot-label">Bay Area Trails</span>
+        </div>
+      </div>
+
+      <div id="social-subwrap" class="sub-menu" hidden>
+        <div class="sub-slot-item" data-action="github">
+          <img src="assets/github.png" alt="">
+          <span class="sub-slot-label">GitHub</span>
+        </div>
+        <div class="sub-slot-item" data-action="linkedin">
+          <img src="assets/linkedin.png" alt="">
+          <span class="sub-slot-label">LinkedIn</span>
+        </div>
+      </div>
+
+      <!-- Content pages (now empty — pages moved to #zoom-overlay) -->
+      <div id="content-overlay"></div><!-- /content-overlay -->
+
+    </div>
+    </div><!-- / #phone-original-markup -->
+
+    <!-- THREE.JS PHONE MODEL CONTAINER -->
+    <div id="phone-3d-container"></div>
+    <!-- / THREE.JS PHONE MODEL CONTAINER -->
+
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+
+    const container = document.getElementById('phone-3d-container');
+
+    // Canvas is rendered larger than the container so tilted model isn't clipped.
+    // Camera aspect uses container dimensions — phone size stays exactly the same.
+    const CANVAS_PAD = 1.5;
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(
+      Math.round(container.clientWidth  * CANVAS_PAD),
+      Math.round(container.clientHeight * CANVAS_PAD)
+    );
+    renderer.toneMapping         = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.3;
+    renderer.outputColorSpace    = THREE.SRGBColorSpace;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.01, 100);
+    camera.position.set(0, -10000, 2.5); // temporary, will be overridden
+
+    // Ambient — low intensity so shadows aren't flat
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.04);
+    scene.add(ambientLight);
+
+    // Key light — main light source, warm, upper left
+    const keyLight = new THREE.DirectionalLight(0xfff5e0, 0.9);
+    keyLight.position.set(-2, 3, 3);
+    scene.add(keyLight);
+
+    // Fill light — cool, opposite side, softer
+    const fillLight = new THREE.DirectionalLight(0xd0e8ff, 0.15);
+    fillLight.position.set(3, 1, 2);
+    scene.add(fillLight);
+
+    // Rim light — behind the phone, creates edge highlight
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    rimLight.position.set(0, -2, -3);
+    scene.add(rimLight);
+
+    // Top light — subtle overhead light
+    const topLight = new THREE.DirectionalLight(0xffffff, 0.12);
+    topLight.position.set(0, 5, 1);
+    scene.add(topLight);
+
+    // Screen glow light — warm light emanating from the screen surface
+    // Position will be updated after GLB loads to match screen mesh world position
+    const screenGlowLight = new THREE.PointLight(0x7799bb, 0, 0.8);
+    screenGlowLight.decay = 2.0;
+    scene.add(screenGlowLight);
+    window._screenGlowLight = screenGlowLight;
+
+    // HDR environment map for reflections
+    const rgbeLoader = new RGBELoader();
+    rgbeLoader.load(
+      'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_08_1k.hdr',
+      (texture) => {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+
+        // Use as scene environment (reflections) but NOT as background
+        scene.environment = texture;
+
+        // Once env map is loaded, update all materials to use it
+        scene.traverse(obj => {
+          if (obj.isMesh && obj.material) {
+            // Don't override the custom screen shader material
+            if (obj.name === 'phone_screen') return;
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            mats.forEach(mat => {
+              if (mat.isMeshStandardMaterial) {
+                mat.envMap          = texture;
+                mat.envMapIntensity = 0.8;
+                mat.needsUpdate     = true;
+              }
+            });
+          }
+        });
+
+        // Also patch the screen-off glass material if it was created before HDR loaded
+        if (window._screenOffMaterial) {
+          window._screenOffMaterial.envMap          = texture;
+          window._screenOffMaterial.envMapIntensity = 0.35;
+          window._screenOffMaterial.needsUpdate     = true;
+        }
+      },
+      undefined,
+      (err) => console.warn('HDR failed to load:', err)
+    );
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableZoom = false;
+    controls.enablePan  = false;
+    controls.enabled    = false; // disabled until intro completes
+    controls.update();
+
+    let screenFacingCamera = true;
+
+    function isScreenFacingCamera() {
+      if (!window._phoneScreenMesh) return true;
+
+      const normal = new THREE.Vector3(0, 0, 1);
+      normal.applyQuaternion(window._phoneScreenMesh.getWorldQuaternion(new THREE.Quaternion()));
+
+      const screenBox    = new THREE.Box3().setFromObject(window._phoneScreenMesh);
+      const screenCenter = screenBox.getCenter(new THREE.Vector3());
+      const toCam        = new THREE.Vector3().subVectors(camera.position, screenCenter).normalize();
+
+      return normal.dot(toCam) > 0;
+    }
+
+    // ── SUB-NAV STATE ────────────────────────────────────────────────────────
+    let subNavOpen      = false;
+    let subNavType      = null;
+    let subNavActiveIdx = 0;
+
+    let navSlideAnim  = false;
+    let navSlideStart = null;
+    let navSlideFrom  = 0;
+    let navSlideTo    = 0;
+    let navSlideY     = 0;
+    const NAV_SLIDE_DURATION = 350;
+
+    let titleFloat     = 0;
+    let titleSlideY    = 25; // px offset: 0 = in position, +25 = slid down/out
+    let titleFloatAnim = false;
+    let titleFloatStart = null;
+    const TITLE_FLOAT_DURATION = 350;
+
+    let subNavFrozen           = false; // sub-nav should be restored after zoom-out
+    let subNavAlpha            = 1;    // separate fade multiplier for sub-nav icons
+    let subNavAlphaAnim        = false;
+    let subNavAlphaStart       = null;
+    let subNavAlphaDir         = 0;    // -1 = fade out, 1 = fade in
+    const SUBNAV_FADE_DURATION = 250;
+
+    let comingSoonAlpha     = 0;
+    let comingSoonAnim      = false;
+    let comingSoonAnimStart = null;
+    let comingSoonDir       = 0; // -1 = fade out, 1 = fade in
+    let comingSoonVisible   = false;
+    const COMING_SOON_DURATION = 300;
+
+    const SUB_NAV_SLOT_W      = 90; // match home-nav icon spacing
+    let subNavGlowScales      = []; // per-icon glow scale 0→1, animated
+    let subNavSizes           = []; // per-icon animated size
+    const GLOW_LERP           = 0.12;
+    const SIZE_LERP           = 0.14;
+
+    const SUB_NAVS = {
+      projects: [
+        { name: 'metaclips',     icon: 'assets/metaclips.jpeg',        label: 'Meta Clips'      },
+        { name: 'charitystream', icon: 'assets/charitystreamicon.png', label: 'CharityStream'  },
+        { name: 'trails',        icon: 'assets/trails.png',            label: 'Bay Area\nTrails' },
+      ],
+      socials: [
+        { name: 'github',   icon: 'assets/github.png',   label: 'GitHub'   },
+        { name: 'linkedin', icon: 'assets/linkedin.png', label: 'LinkedIn' },
+      ],
+    };
+    // ── / SUB-NAV STATE ──────────────────────────────────────────────────────
+
+    // ── ICON FADE STATE ──────────────────────────────────────────────────────
+    let iconFadeAlpha     = 1;
+    let iconFadeOffsetY   = 0;
+    let iconFadeAnimating = false;
+    let iconFadeStart     = null;
+    let iconFadeDir       = 0; // -1 = fading out, 1 = fading in
+    const ICON_FADE_DURATION = 280;
+    const ICON_FADE_SHIFT    = 18; // canvas px to shift upward during fade-out
+    // ── / ICON FADE STATE ────────────────────────────────────────────────────
+
+    // ── ZOOM STATE ───────────────────────────────────────────────────────────
+    let isZoomedIn       = false;
+    let isZoomAnimating  = false;
+    let zoomAnimStart    = null;
+    const ZOOM_DURATION  = 600;
+    const ZOOM_EASE      = t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+
+    let savedCamPos    = new THREE.Vector3();
+    let savedCamTarget = new THREE.Vector3();
+    let savedModelRot  = new THREE.Euler();
+
+    let zoomStartPos    = new THREE.Vector3();
+    let zoomStartTarget = new THREE.Vector3();
+    let zoomEndPos      = new THREE.Vector3();
+    let zoomEndTarget   = new THREE.Vector3();
+
+    // ── / ZOOM STATE ─────────────────────────────────────────────────────────
+
+    // Keyboard animation state — declared at module scope so event listener can access them
+    let slidePos     = 0;
+    let slideTarget  = 0;
+    const SLIDE_EASE = 0.12;
+
+    // Screen state machine
+    let screenState         = 'loading';
+    let screenStateTime     = 0;
+    let passwordEntry       = '';
+    const CORRECT_PASSWORD  = 'branden';
+
+    // ── Debug helpers ────────────────────────────────────────────────────────
+    const SHOW_CENTER_LINE = false; // toggle vertical center line overlay
+    document.getElementById('debug-centerline').style.display = SHOW_CENTER_LINE ? 'block' : 'none';
+
+    // INSPECT_MODE: skips intro spin/bob/click, enables free orbit drag to inspect the model.
+    // Set false to restore normal site behaviour.
+    const INSPECT_MODE = false;
+    window._INSPECT_MODE = INSPECT_MODE;
+    const DEBUG_KEYBOARD_COORDS = false; // log keyboardGroup local coords on every keyboard click
+    // ── / Debug helpers ──────────────────────────────────────────────────────
+
+    // ── Intro spin state ─────────────────────────────────────────────────────
+    // Phases: 'spin' → (click) → 'align' → (keyboard slide) → normal flow
+    let introPhase      = 'spin'; // 'spin' | 'align' | 'done'
+    let introHover      = false;
+    let introSpinY      = 0;      // accumulated Y rotation
+    const SPIN_SLOW     = 0.008;  // rad/frame idle
+    const SPIN_FAST     = 0.026;  // rad/frame hovered
+    let   spinSpeed     = SPIN_SLOW;
+    // Target rotation when phone faces camera: model starts at rotation.x = Math.PI/2 + 0.01
+    // Vertical with slight tilt = rotate around Z by ~80° CCW, around Y to face cam
+    // We'll set initial rotation in the GLB load callback and animate to face-cam rotation on click
+    let introAlignStart  = null;
+    let introAlignFrom   = null; // {y} snapshot at click (only Y matters now)
+    const ALIGN_DURATION = 1200; // ms
+    // Glow pulse on hover
+    let introGlowLight   = null;
+    let introGlowTarget  = 0;
+    // Parent group that drives all spin/Z rotation — model and keyboardGroup live inside it
+    let phoneSpinGroup   = null;
+    // ── / Intro spin state ───────────────────────────────────────────────────
+
+    function setScreenState(state) {
+      screenState     = state;
+      screenStateTime = performance.now();
+      if (state === 'password' || state === 'loading' || state === 'wrong' ||
+          state === 'rotating' || state === 'logging-in') {
+        if (window._setFloatAnimation) window._setFloatAnimation(false);
+      } else if (state === 'home') {
+        if (window._setFloatAnimation) window._setFloatAnimation(true);
+      }
+      passwordEntry = state === 'password' ? '' : passwordEntry;
+    }
+
+    // Welcome video — preloads immediately, plays after intro align completes
+    const welcomeVideo           = document.createElement('video');
+    welcomeVideo.src             = 'assets/welcome.mp4';
+    welcomeVideo.muted           = true;
+    welcomeVideo.playsInline     = true;
+    welcomeVideo.preload         = 'auto';
+    const VIDEO_EARLY_END_SECS = 2; // stop this many seconds before the natural end
+
+    function _onVideoStop() {
+      if (window._videoStopped) return; // guard against double-fire
+      window._videoStopped    = true;
+      welcomeVideo.pause();
+      window._videoCamZooming    = false;
+      window._videoFadeAlpha     = 0;
+      window._videoFadingOut     = true;
+      window._videoFadeOutDoneAt = null;
+    }
+
+    welcomeVideo.addEventListener('timeupdate', () => {
+      if (!window._videoStopped && welcomeVideo.duration > 0 &&
+          welcomeVideo.currentTime >= welcomeVideo.duration - VIDEO_EARLY_END_SECS) {
+        _onVideoStop();
+      }
+    });
+
+    welcomeVideo.addEventListener('ended', _onVideoStop);
+
+    function _triggerPostVideoRotation() {
+      window._videoFadeComplete = true; // prevent fade-in logic from re-running
+      setScreenState('rotating');
+      window._bgFadeAlpha = 0;          // shader fades in during rotation
+
+      introZRotFrom = 0;
+      introZRotTo   = 1;
+      window._zRotStartQuat = new THREE.Quaternion();
+      window._zRotEndQuat   = new THREE.Quaternion();
+      phoneSpinGroup.getWorldQuaternion(window._zRotStartQuat);
+      const zRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
+	      window._zRotEndQuat.multiplyQuaternions(zRot, window._zRotStartQuat);
+	      introZRotStart = null;
+	      introZRotAnim  = true;
+	      startPhoneRotateAudio(phoneRotate2Audio);
+	      if (window._screenGlowLight) window._videoGlowTarget = 0;
+	    }
+
+	    // Intro audio — plays alongside welcome.mp4
+	    const introAudio = new Audio('assets/intro.wav');
+	    introAudio.preload = 'auto';
+	    const phoneClickAudio = new Audio('sounds/phone_click.wav');
+	    phoneClickAudio.preload = 'auto';
+	    const phoneRotateAudio = new Audio('sounds/phone_rotate.wav');
+	    phoneRotateAudio.preload = 'auto';
+	    phoneRotateAudio.loop = true;
+	    const phoneRotate2Audio = new Audio('sounds/phone_rotate_2.wav');
+	    phoneRotate2Audio.preload = 'auto';
+	    phoneRotate2Audio.loop = true;
+	    const clickAudio = new Audio('sounds/click.wav');
+	    clickAudio.preload = 'auto';
+	    window._registerManagedAudio?.(introAudio, 1);
+	    window._registerManagedAudio?.(phoneClickAudio, 0.25);
+	    window._registerManagedAudio?.(phoneRotateAudio, 0);
+	    window._registerManagedAudio?.(phoneRotate2Audio, 0);
+	    window._registerManagedAudio?.(clickAudio, 1);
+	    const PHONE_ROTATE_VOLUME = 0.42;
+	    const PHONE_ROTATE_FADE_PORTION = 0.16;
+	    let activePhoneRotateAudio = null;
+	    function startPhoneRotateAudio(audio) {
+	      if (!audio) return;
+	      audio.pause();
+	      audio.currentTime = 0;
+	      window._setManagedAudioBaseVolume?.(audio, 0);
+	      audio.playbackRate = 1;
+	      activePhoneRotateAudio = audio;
+	      const playPromise = audio.play();
+	      if (playPromise && typeof playPromise.catch === 'function') {
+	        playPromise.catch(() => {});
+	      }
+	    }
+	    function updatePhoneRotateAudio(progress, durationMs) {
+	      if (!activePhoneRotateAudio) return;
+	      const fadeInT  = Math.min(1, progress / PHONE_ROTATE_FADE_PORTION);
+	      const fadeOutT = Math.min(1, (1 - progress) / PHONE_ROTATE_FADE_PORTION);
+	      window._setManagedAudioBaseVolume?.(
+	        activePhoneRotateAudio,
+	        PHONE_ROTATE_VOLUME * Math.min(fadeInT, fadeOutT)
+	      );
+	      if (activePhoneRotateAudio.duration && Number.isFinite(activePhoneRotateAudio.duration) && activePhoneRotateAudio.duration > 0) {
+	        activePhoneRotateAudio.playbackRate = Math.max(0.25, (activePhoneRotateAudio.duration * 1000) / durationMs);
+	      }
+	    }
+	    function stopPhoneRotateAudio() {
+	      if (!activePhoneRotateAudio) return;
+	      activePhoneRotateAudio.pause();
+	      activePhoneRotateAudio.currentTime = 0;
+	      window._setManagedAudioBaseVolume?.(activePhoneRotateAudio, 0);
+	      activePhoneRotateAudio.playbackRate = 1;
+	      activePhoneRotateAudio = null;
+	    }
+
+	    let keyboardGroup     = null;
+	    let keyboardAnimating = false;
+    let keyboardAnimStart = null;
+    let keyboardTargetY   = 0;
+    let keyboardStartY    = 0;
+    const KEYBOARD_DURATION = 1200;
+    const KEYBOARD_EASING   = t => t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+
+    // Intro Z rotation (portrait → landscape, triggered when welcome video ends)
+    let introZRotAnim          = false;
+    let introZRotStart         = null;
+    let introZRotFrom          = 0;
+    let introZRotTo            = Math.PI / 2;
+    const INTRO_Z_ROT_DURATION = 1200;
+
+	    function triggerKeyboardSlide() {
+	      if (!keyboardGroup || keyboardAnimating) return;
+	      keyboardStartY    = keyboardGroup.position.z; // start: hidden inside phone body
+	      keyboardTargetY   = keyboardGroup.position.z + 0.159; // end: slid out below phone
+	      keyboardAnimStart = null;
+	      keyboardAnimating = true;
+	      controls.enabled  = false;
+	    }
+
+    // phone-ready is still dispatched by script.js but keyboard slide
+    // is now triggered by the intro click sequence, not on load.
+
+    // ── OFFSCREEN SCREEN SHADER ──────────────────────────────────────────────
+    // Renders the sine wave onto a canvas that feeds into the phone_screen mesh.
+
+    const offscreen   = document.createElement('canvas');
+    offscreen.width   = 256;
+    offscreen.height  = 512;
+    const ogl = offscreen.getContext('webgl') || offscreen.getContext('experimental-webgl');
+
+    const SCREEN_VS = `
+      attribute vec2 a_pos;
+      void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }
+    `;
+
+    const SCREEN_FS = `
+      precision mediump float;
+      uniform float iTime;
+      uniform vec2  iResolution;
+
+      const float speed       = 0.4;
+      const float widthFactor = 2.0;
+
+      vec3 calcSine(vec2 uv,
+                    float frequency, float amplitude, float shift, float offset,
+                    vec3 color, float width, float exponent, bool dir) {
+        float angle = iTime * speed * frequency + (shift + uv.x) * 0.75;
+        float y     = sin(angle) * amplitude + offset;
+        float diffY = y - uv.y;
+        float dsqr  = distance(y, uv.y);
+        float scale = 1.0;
+        if (dir  && diffY > 0.0) dsqr *= 4.0;
+        if (!dir && diffY < 0.0) dsqr *= 4.0;
+        scale = pow(smoothstep(width * widthFactor, 0.0, dsqr), exponent);
+        return min(color * scale, color);
+      }
+
+      void main() {
+        vec2 uv = gl_FragCoord.xy / iResolution;
+        // no rotation — handled by Three.js texture transform
+        vec3 color = vec3(0.0);
+        vec3 wg    = vec3(0.55, 0.53, 0.50);
+
+        color += calcSine(uv, 0.20, 0.20, 0.0, 0.5, wg, 0.10, 15.0, false);
+        color += calcSine(uv, 0.40, 0.15, 0.0, 0.5, wg, 0.10, 17.0, false);
+        color += calcSine(uv, 0.60, 0.15, 0.0, 0.5, wg, 0.05, 23.0, false);
+        color += calcSine(uv, 0.26, 0.07, 0.0, 0.3, wg, 0.10, 17.0, true);
+        color += calcSine(uv, 0.46, 0.07, 0.0, 0.3, wg, 0.05, 23.0, true);
+        color += calcSine(uv, 0.58, 0.05, 0.0, 0.3, wg, 0.20, 15.0, true);
+
+        color *= 0.6;
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    function compileOffscreen(type, src) {
+      const s = ogl.createShader(type);
+      ogl.shaderSource(s, src);
+      ogl.compileShader(s);
+      if (!ogl.getShaderParameter(s, ogl.COMPILE_STATUS)) {
+        console.error('Screen shader error:', ogl.getShaderInfoLog(s));
+        return null;
+      }
+      return s;
+    }
+
+    const screenProg = ogl.createProgram();
+    ogl.attachShader(screenProg, compileOffscreen(ogl.VERTEX_SHADER,   SCREEN_VS));
+    ogl.attachShader(screenProg, compileOffscreen(ogl.FRAGMENT_SHADER, SCREEN_FS));
+    ogl.linkProgram(screenProg);
+
+    const screenBuf = ogl.createBuffer();
+    ogl.bindBuffer(ogl.ARRAY_BUFFER, screenBuf);
+    ogl.bufferData(ogl.ARRAY_BUFFER, new Float32Array([
+      -1,-1,  1,-1,  -1,1,
+      -1, 1,  1,-1,   1,1,
+    ]), ogl.STATIC_DRAW);
+
+    const screenAPos  = ogl.getAttribLocation(screenProg,  'a_pos');
+    const screenUTime = ogl.getUniformLocation(screenProg, 'iTime');
+    const screenURes  = ogl.getUniformLocation(screenProg, 'iResolution');
+
+    ogl.viewport(0, 0, 256, 512);
+
+    // Compositing canvas — shader pixels copied here, then icons drawn on top
+    const compCanvas  = document.createElement('canvas');
+    compCanvas.width  = 256;
+    compCanvas.height = 512;
+    const compCtx     = compCanvas.getContext('2d');
+
+    const screenTexture     = new THREE.CanvasTexture(compCanvas);
+    screenTexture.flipY     = false;
+    screenTexture.center.set(0.5, 0.5);
+    screenTexture.rotation  = Math.PI / -2;
+
+    // Tab definitions and icon preload
+    const TAB_DEFS = [
+      { name: 'about',    icon: 'assets/about.png',    label: 'about me'   },
+      { name: 'projects', icon: 'assets/projects.png', label: 'projects'   },
+      { name: 'skills',   icon: 'assets/skills.png',   label: 'skills'     },
+      { name: 'contact',  icon: 'assets/contact.png',  label: 'contact'    },
+      { name: 'socials',  icon: 'assets/socials.png',  label: 'my socials' },
+    ];
+
+    const tabImages = {};
+    let   imagesLoaded = 0;
+
+    TAB_DEFS.forEach(tab => {
+      const img  = new Image();
+      img.src    = tab.icon;
+      img.onload = () => { imagesLoaded++; };
+      tabImages[tab.name] = img;
+    });
+
+    const subNavImages = {};
+    Object.values(SUB_NAVS).forEach(items => {
+      items.forEach(item => {
+        const img  = new Image();
+        img.src    = item.icon;
+        img.onload = () => { imagesLoaded++; };
+        subNavImages[item.name] = img;
+      });
+    });
+
+    const batteryImg = new Image();
+    batteryImg.src = 'assets/battery.png';
+
+    function drawScreenUI() {
+      const W       = compCanvas.width;
+      const H       = compCanvas.height;
+      const now     = performance.now();
+      const elapsed = (now - screenStateTime) / 1000;
+
+      // ── Screen-off glass during intro spin ──────────────────────────────────
+      if (introPhase === 'spin') {
+        // Deep black base
+        compCtx.fillStyle = '#000000';
+        compCtx.fillRect(0, 0, W, H);
+
+        // Diagonal highlight from top-left — simulates glass reflection
+        const glare = compCtx.createLinearGradient(0, 0, W * 0.55, H * 0.35);
+        glare.addColorStop(0,    'rgba(200,210,230,0.09)');
+        glare.addColorStop(0.25, 'rgba(200,210,230,0.04)');
+        glare.addColorStop(1,    'rgba(0,0,0,0.00)');
+        compCtx.fillStyle = glare;
+        compCtx.fillRect(0, 0, W, H);
+
+        // Thin bright edge along top — bezel catch-light
+        const topEdge = compCtx.createLinearGradient(0, 0, 0, H * 0.04);
+        topEdge.addColorStop(0, 'rgba(255,255,255,0.08)');
+        topEdge.addColorStop(1, 'rgba(255,255,255,0.00)');
+        compCtx.fillStyle = topEdge;
+        compCtx.fillRect(0, 0, W, H * 0.04);
+
+        screenTexture.needsUpdate = true;
+        return;
+      }
+      // ── / Screen-off glass ───────────────────────────────────────────────────
+
+      // Shader background — fades in during rotation phase, hidden during video
+      const bgAlpha = screenState === 'video'    ? 0
+                    : screenState === 'rotating' ? (window._bgFadeAlpha ?? 0)
+                    : 1;
+      if (bgAlpha > 0) {
+        compCtx.save();
+        compCtx.globalAlpha = bgAlpha;
+        compCtx.translate(W, 0);
+        compCtx.scale(-1, 1);
+        compCtx.drawImage(offscreen, 0, 0, W, H);
+        compCtx.restore();
+      }
+
+      const V_OFFSET = H * -0.12;
+      compCtx.save();
+      compCtx.translate(0, V_OFFSET);
+
+      if (screenState === 'loading') {
+        drawLoadingScreen(W, H, now);
+        if (elapsed > 2 && introPhase === 'done') setScreenState('password');
+      } else if (screenState === 'password') {
+        drawPasswordScreen(W, H);
+      } else if (screenState === 'wrong') {
+        drawWrongPassword(W, H);
+        if (elapsed > 1.5) setScreenState('password');
+      } else if (screenState === 'video') {
+        drawVideoScreen(W, H);
+      } else if (screenState === 'rotating') {
+        // Shader only — no UI yet (keyboard is still sliding down)
+        // Black overlay fades out as bgFadeAlpha ramps up
+        const blackAlpha = 1 - (window._bgFadeAlpha ?? 0);
+        if (blackAlpha > 0) {
+          compCtx.fillStyle = `rgba(0,0,0,${blackAlpha})`;
+          compCtx.fillRect(0, 0, W, H);
+        }
+      } else if (screenState === 'logging-in') {
+        drawLoadingScreen(W, H, now);
+        if (elapsed > 2) {
+          window._activeTab = 0;
+          slidePos          = 0;
+          slideTarget       = 0;
+          // Start icons fully invisible then fade them in
+          iconFadeAlpha     = 0;
+          iconFadeOffsetY   = ICON_FADE_SHIFT;
+          iconFadeDir       = 1;
+          iconFadeStart     = performance.now();
+          iconFadeAnimating = true;
+          window._playUiSound?.('open');
+          setScreenState('home');
+        }
+      } else if (screenState === 'home') {
+        drawHomeScreen(W, H);
+      }
+
+      compCtx.restore();
+
+      // Hint text — fades in with password UI
+      if (screenState === 'password' || screenState === 'wrong') {
+        const uiA = window._passwordUIAlpha ?? 1;
+        compCtx.save();
+        compCtx.globalAlpha  = 0.4 * uiA;
+        compCtx.fillStyle    = '#ffffff';
+        compCtx.font         = '14px Helvetica, Arial, sans-serif';
+        compCtx.textAlign    = 'right';
+        compCtx.textBaseline = 'top';
+        compCtx.fillText('(Hint): password is "branden"', W - 10, 10);
+        compCtx.restore();
+      }
+
+      screenTexture.needsUpdate = true;
+    }
+
+    function drawLoadingScreen(W, H, now) {
+      compCtx.fillStyle = 'rgba(0,0,0,0.5)';
+      compCtx.fillRect(0, 0, W, H);
+
+      const cx    = W / 2;
+      const cy    = H / 2;
+      const r     = 18;
+      const angle = (now / 600) * Math.PI * 2;
+
+      for (let i = 0; i < 8; i++) {
+        const trailAngle = angle - i * (Math.PI / 5);
+        const tx = cx + Math.cos(trailAngle) * r;
+        const ty = cy + Math.sin(trailAngle) * r;
+        compCtx.beginPath();
+        compCtx.arc(tx, ty, 4 - i * 0.3, 0, Math.PI * 2);
+        compCtx.fillStyle = `rgba(255,255,255,${0.9 - i * 0.1})`;
+        compCtx.fill();
+      }
+    }
+
+    function drawPasswordScreen(W, H) {
+      const uiA = window._passwordUIAlpha ?? 1;
+
+      compCtx.fillStyle = `rgba(0,0,0,${0.55 * uiA})`;
+      compCtx.fillRect(0, 0, W, H);
+
+      compCtx.save();
+      compCtx.globalAlpha  = uiA;
+      compCtx.fillStyle    = 'rgba(255,255,255,0.9)';
+      compCtx.font         = 'bold 16px Helvetica, Arial, sans-serif';
+      compCtx.textAlign    = 'center';
+      compCtx.textBaseline = 'middle';
+      compCtx.shadowColor  = 'rgba(255,255,255,0.4)';
+      compCtx.shadowBlur   = 8;
+      compCtx.fillText('password:', W / 2, H / 2 - 30);
+      compCtx.restore();
+
+      const boxW = 160, boxH = 28;
+      const boxX = W / 2 - boxW / 2;
+      const boxY = H / 2 - 8;
+      compCtx.save();
+      compCtx.globalAlpha = uiA;
+      compCtx.strokeStyle = 'rgba(255,255,255,0.6)';
+      compCtx.lineWidth   = 1.5;
+      compCtx.strokeRect(boxX, boxY, boxW, boxH);
+      compCtx.fillStyle = 'rgba(255,255,255,0.08)';
+      compCtx.fillRect(boxX, boxY, boxW, boxH);
+      compCtx.restore();
+
+      compCtx.save();
+      compCtx.globalAlpha = uiA;
+      const dots       = passwordEntry.length;
+      const dotSpacing = 14;
+      const startX     = W / 2 - ((dots - 1) * dotSpacing) / 2;
+      for (let i = 0; i < dots; i++) {
+        compCtx.beginPath();
+        compCtx.arc(startX + i * dotSpacing, boxY + boxH / 2, 4, 0, Math.PI * 2);
+        compCtx.fillStyle = '#ffffff';
+        compCtx.fill();
+      }
+      compCtx.restore();
+    }
+
+    function drawWrongPassword(W, H) {
+      compCtx.fillStyle = 'rgba(0,0,0,0.55)';
+      compCtx.fillRect(0, 0, W, H);
+
+      compCtx.save();
+      compCtx.fillStyle    = '#ff4444';
+      compCtx.font         = 'bold 16px Helvetica, Arial, sans-serif';
+      compCtx.textAlign    = 'center';
+      compCtx.textBaseline = 'middle';
+      compCtx.shadowColor  = 'rgba(255,0,0,0.5)';
+      compCtx.shadowBlur   = 10;
+      compCtx.fillText('Wrong Password', W / 2, H / 2);
+      compCtx.restore();
+    }
+
+    function drawVideoScreen(W, H) {
+      compCtx.fillStyle = '#000000';
+      compCtx.fillRect(0, 0, W, H);
+      if (welcomeVideo.readyState >= 2) {
+        // Rotate video 90° clockwise on the canvas before drawing
+        compCtx.save();
+        compCtx.translate(W / 2, H / 2);
+        compCtx.rotate(Math.PI / 2); // 90° clockwise
+        compCtx.drawImage(welcomeVideo, -H / 2, -W / 2, H, W);
+        compCtx.restore();
+      }
+      // Fade overlay — black at alpha 1 (start/end), transparent at 0 (mid-video)
+      const fa = window._videoFadeAlpha ?? 0;
+      if (fa > 0) {
+        compCtx.fillStyle = `rgba(0,0,0,${fa})`;
+        compCtx.fillRect(0, 0, W, H);
+      }
+    }
+
+    function drawHomeScreen(W, H) {
+      // Sync target to activeTab
+      const active = (typeof window._activeTab === 'number') ? window._activeTab : 0;
+      slideTarget  = active;
+
+      // Always take shortest path around the circular tab list
+      const N_TABS = TAB_DEFS.length;
+      let diff = slideTarget - slidePos;
+      while (diff >  N_TABS / 2) diff -= N_TABS;
+      while (diff < -N_TABS / 2) diff += N_TABS;
+      slidePos += diff * SLIDE_EASE;
+      if (slidePos >= N_TABS) slidePos -= N_TABS;
+      if (slidePos <  0)      slidePos += N_TABS;
+
+      const SLOT_W        = 90;
+      const CENTER_X      = W / 2;
+      const CENTER_Y      = H / 2;
+      const ICON_SIZE_SM  = 34;
+      const ICON_SIZE_LG  = 56;
+      const ICON_STRETCH_Y = 1.28;
+
+      const slots        = [-1, 0, 1];
+      const roundedSlide = Math.round(slidePos);
+
+      if (iconFadeAlpha <= 0) {
+        drawStatusBar(W, H);
+        if (subNavOpen || navSlideY < 0) drawSubNav(W, H);
+        if (titleFloat > 0.01 && subNavType) {
+          compCtx.save();
+          compCtx.globalAlpha  = titleFloat;
+          compCtx.fillStyle    = '#ffffff';
+          compCtx.font         = 'bold 20px Helvetica, Arial, sans-serif';
+          compCtx.textAlign    = 'center';
+          compCtx.textBaseline = 'middle';
+          compCtx.shadowColor  = 'rgba(255,255,255,0.1)';
+          compCtx.shadowBlur   = 4;
+          compCtx.fillText(subNavType, W / 2, Math.round(H * 0.12) + 20 + titleSlideY);
+          compCtx.restore();
+        }
+        if (comingSoonVisible && comingSoonAlpha > 0.01) drawComingSoon(W, H);
+        return;
+      }
+
+      compCtx.save();
+      compCtx.translate(0, navSlideY);
+
+      slots.forEach(offset => {
+        const tabIdx       = ((roundedSlide + offset) % N_TABS + N_TABS) % N_TABS;
+        const tab          = TAB_DEFS[tabIdx];
+        const img          = tabImages[tab.name];
+        const x            = CENTER_X + (offset - (slidePos - roundedSlide)) * SLOT_W;
+        const y            = CENTER_Y - iconFadeOffsetY;
+        const distFromActive = Math.abs(offset - (slidePos - roundedSlide));
+        const isActive     = offset === 0;
+        const sizeLerp     = Math.max(0, 1 - distFromActive);
+        const baseSize     = ICON_SIZE_SM + (ICON_SIZE_LG - ICON_SIZE_SM) * sizeLerp;
+        const size         = tab.name === 'projects' ? baseSize * 1.4 : baseSize;
+
+        if (!img) return;
+
+        const grayscalePct = (1 - sizeLerp) * 100;
+        const iconAlpha    = (0.45 + sizeLerp * 0.55) * iconFadeAlpha;
+        compCtx.save();
+        compCtx.globalAlpha = iconAlpha;
+        compCtx.filter      = grayscalePct > 0.5 ? `grayscale(${grayscalePct.toFixed(1)}%)` : 'none';
+        compCtx.drawImage(img, x - size/2, y - (size * ICON_STRETCH_Y)/2, size, size * ICON_STRETCH_Y);
+        compCtx.restore();
+
+        // Use scale transform for smooth sub-pixel text sizing (avoids integer font-size staircase)
+        const BASE_FONT    = 13;
+        const textScale    = 1 + (17 / BASE_FONT - 1) * sizeLerp; // 1.0 → ~1.31
+        const textAlpha    = (0.4 + 0.55 * sizeLerp) * iconFadeAlpha;
+        const labelY       = y + (baseSize * ICON_STRETCH_Y) / 2 + 5;
+        compCtx.save();
+        compCtx.globalAlpha  = textAlpha;
+        compCtx.fillStyle    = '#ffffff';
+        compCtx.font         = `bold ${BASE_FONT}px Helvetica, Arial, sans-serif`;
+        compCtx.textAlign    = 'center';
+        compCtx.textBaseline = 'top';
+        if (sizeLerp > 0.05) {
+          compCtx.shadowColor = 'rgba(255,255,255,0.3)';
+          compCtx.shadowBlur  = 4 * sizeLerp;
+        }
+        compCtx.translate(x, labelY);
+        compCtx.scale(textScale, textScale);
+        compCtx.fillText(tab.label, 0, 0);
+        compCtx.restore();
+      });
+
+      compCtx.save();
+      compCtx.globalAlpha  = 0.5 * iconFadeAlpha;
+      compCtx.fillStyle    = '#ffffff';
+      compCtx.font         = '16px Helvetica';
+      compCtx.textAlign    = 'center';
+      compCtx.textBaseline = 'middle';
+      compCtx.fillText('‹', 10, CENTER_Y - iconFadeOffsetY);
+      compCtx.fillText('›', W - 10, CENTER_Y - iconFadeOffsetY);
+      compCtx.restore();
+
+      compCtx.restore(); // end navSlideY translate
+
+      // Sub-nav title — fades in at top of screen when sub-nav opens
+      if (titleFloat > 0.01 && subNavType) {
+        compCtx.save();
+        compCtx.globalAlpha  = titleFloat;
+        compCtx.fillStyle    = '#ffffff';
+        compCtx.font         = 'bold 20px Helvetica, Arial, sans-serif';
+        compCtx.textAlign    = 'center';
+        compCtx.textBaseline = 'middle';
+        compCtx.shadowColor  = 'rgba(255,255,255,0.1)';
+        compCtx.shadowBlur   = 8;
+        compCtx.fillText(subNavType, W / 2, Math.round(H * 0.12) + 20 + titleSlideY);
+        compCtx.restore();
+      }
+
+      drawStatusBar(W, H);
+      // Draw sub-nav if open or sliding
+      if (subNavOpen || navSlideY < 0) drawSubNav(W, H);
+      if (comingSoonVisible && comingSoonAlpha > 0.01) drawComingSoon(W, H);
+    }
+
+    function drawStatusBar(W, H) {
+      const barY    = Math.round(H * 0.12) + 14; // compensates for V_OFFSET translate
+      const PADDING = 1;
+      const ICON_H  = 20;
+
+      compCtx.save();
+      compCtx.globalAlpha = 0.85;
+
+      // Battery icon — top left
+      if (batteryImg.complete && batteryImg.naturalWidth > 0) {
+        const aspect  = batteryImg.naturalWidth / batteryImg.naturalHeight;
+        const iconW   = ICON_H * aspect;
+        compCtx.drawImage(batteryImg, PADDING, barY - ICON_H / 2, iconW, ICON_H);
+      }
+
+      // Time — top right, local timezone
+      const now  = new Date();
+      const h    = now.getHours() % 12 || 12; // 12-hour, no leading zero
+      const m    = String(now.getMinutes()).padStart(2, '0');
+      const timeStr = `${h}:${m}`;
+      compCtx.fillStyle    = '#ffffff';
+      compCtx.font         = 'bold 14px Helvetica, Arial, sans-serif';
+      compCtx.textAlign    = 'right';
+      compCtx.textBaseline = 'middle';
+      compCtx.shadowColor  = 'rgba(0,0,0,0.4)';
+      compCtx.shadowBlur   = 2;
+      compCtx.fillText(timeStr, W - PADDING, barY);
+
+      compCtx.restore();
+    }
+
+    function drawComingSoon(W, H) {
+      const cardW = W * 0.72;
+      const cardH = H * 0.18;
+      const cardX = (W - cardW) / 2;
+      const cardY = H * 0.35;
+      compCtx.save();
+      compCtx.globalAlpha = comingSoonAlpha;
+      compCtx.fillStyle = 'rgba(20,20,30,0.82)';
+      compCtx.beginPath();
+      compCtx.roundRect(cardX, cardY, cardW, cardH, 10);
+      compCtx.fill();
+      compCtx.strokeStyle = 'rgba(255,255,255,0.18)';
+      compCtx.lineWidth = 1;
+      compCtx.stroke();
+      compCtx.fillStyle    = '#ffffff';
+      compCtx.font         = 'bold 14px Helvetica, Arial, sans-serif';
+      compCtx.textAlign    = 'center';
+      compCtx.textBaseline = 'middle';
+      compCtx.shadowColor  = 'rgba(255,255,255,0.5)';
+      compCtx.shadowBlur   = 8;
+      compCtx.fillText('Coming Soon', W / 2, cardY + cardH * 0.42);
+      compCtx.shadowBlur   = 0;
+      compCtx.globalAlpha  = comingSoonAlpha * 0.55;
+      compCtx.font         = '10px Helvetica, Arial, sans-serif';
+      compCtx.fillText('Press Esc to go back', W / 2, cardY + cardH * 0.72);
+      compCtx.restore();
+    }
+
+    function drawSubNav(W, H) {
+      if (!subNavType) return;
+      const items         = SUB_NAVS[subNavType];
+      const slideProgress = Math.min(1, Math.abs(navSlideY) / (H * 0.6));
+
+      const SLOT_W       = SUB_NAV_SLOT_W;
+      const CENTER_X     = W / 2;
+      const ICON_SIZE_SM = 36;
+      const ICON_SIZE_LG = 68;
+      const subY         = H / 2 + H * 0.15 * (1 - slideProgress);
+
+      const sp = slideProgress * subNavAlpha; // combined opacity factor
+      if (sp <= 0) return;
+
+      compCtx.save();
+      compCtx.globalAlpha = sp;
+
+      // Draw per-icon glow circles (shrink/grow on switch)
+      items.forEach((item, i) => {
+        const scale = subNavGlowScales[i] ?? (i === subNavActiveIdx ? 1 : 0);
+        if (scale < 0.01) return;
+        const x        = CENTER_X + (i - (items.length - 1) / 2) * SLOT_W;
+        const glowSize = ICON_SIZE_LG * 0.6 * scale;
+        const grd = compCtx.createRadialGradient(x, subY, glowSize * 0.2, x, subY, glowSize);
+        grd.addColorStop(0, 'rgba(255,255,255,0.14)');
+        grd.addColorStop(1, 'rgba(255,255,255,0.0)');
+        compCtx.save();
+        compCtx.globalCompositeOperation = 'lighter';
+        compCtx.globalAlpha = sp;
+        compCtx.beginPath();
+        compCtx.arc(x, subY, glowSize, 0, Math.PI * 2);
+        compCtx.fillStyle = grd;
+        compCtx.fill();
+        compCtx.restore();
+      });
+
+      items.forEach((item, i) => {
+        const offset   = i - (items.length - 1) / 2;
+        const x        = CENTER_X + offset * SLOT_W;
+        const y        = subY;
+        const isActive = i === subNavActiveIdx;
+        const size     = subNavSizes[i] ?? (isActive ? ICON_SIZE_LG : ICON_SIZE_SM);
+        const img      = subNavImages[item.name];
+        if (!img) return;
+
+        compCtx.save();
+        if (!isActive) {
+          compCtx.globalAlpha = 0.45 * sp;
+          compCtx.filter      = 'grayscale(100%)';
+        } else {
+          compCtx.globalAlpha = sp;
+        }
+        const stretchY = item.name === 'linkedin' ? 1.18 : 1;
+        compCtx.drawImage(img, x - size/2, y - (size * stretchY)/2, size, size * stretchY);
+        compCtx.restore();
+
+        // sizeFraction: 0 = fully inactive, 1 = fully active (driven by animated subNavSizes[i])
+        const sizeFraction = Math.max(0, Math.min(1, (size - ICON_SIZE_SM) / (ICON_SIZE_LG - ICON_SIZE_SM)));
+        const BASE_FONT    = subNavType === 'projects' ? 9 : 12;
+        const textScale    = subNavType === 'projects'
+          ? 1 + (11 / BASE_FONT - 1) * sizeFraction
+          : 1 + (15 / BASE_FONT - 1) * sizeFraction; // smooth active growth
+        const textAlpha    = (0.4 + 0.55 * sizeFraction) * sp;
+        const labelY       = y + size/2 + 5;
+        compCtx.save();
+        compCtx.globalAlpha  = textAlpha;
+        compCtx.fillStyle    = '#ffffff';
+        compCtx.font         = `bold ${BASE_FONT}px Helvetica, Arial, sans-serif`;
+        compCtx.textAlign    = 'center';
+        compCtx.textBaseline = 'top';
+        if (sizeFraction > 0.05) {
+          compCtx.shadowColor = 'rgba(255,255,255,0.35)';
+          compCtx.shadowBlur  = 4 * sizeFraction;
+        }
+        compCtx.translate(x, labelY);
+        compCtx.scale(textScale, textScale * 1.28);
+        const labelLines = item.label.split('\n');
+        labelLines.forEach((line, lineIdx) => {
+          compCtx.fillText(line, 0, lineIdx * (BASE_FONT + 2));
+        });
+        compCtx.restore();
+      });
+
+      if (items.length > 1) {
+        compCtx.save();
+        compCtx.globalAlpha  = 0.5 * sp;
+        compCtx.fillStyle    = '#ffffff';
+        compCtx.font         = '14px Helvetica';
+        compCtx.textAlign    = 'center';
+        compCtx.textBaseline = 'middle';
+        compCtx.fillText('‹', CENTER_X - SLOT_W * 1.5, subY);
+        compCtx.fillText('›', CENTER_X + SLOT_W * 1.5, subY);
+        compCtx.restore();
+      }
+
+      compCtx.restore();
+    }
+
+    const screenT0 = performance.now();
+
+    function renderScreenShader() {
+      if (!ogl) return;
+      ogl.useProgram(screenProg);
+      ogl.bindBuffer(ogl.ARRAY_BUFFER, screenBuf);
+      ogl.enableVertexAttribArray(screenAPos);
+      ogl.vertexAttribPointer(screenAPos, 2, ogl.FLOAT, false, 0, 0);
+      ogl.uniform1f(screenUTime, (performance.now() - screenT0) / 1000);
+      ogl.uniform2f(screenURes,  offscreen.width, offscreen.height);
+      ogl.drawArrays(ogl.TRIANGLES, 0, 6);
+
+      // Composite icons on top
+      drawScreenUI();
+    }
+    // ── / OFFSCREEN SCREEN SHADER ─────────────────────────────────────────────
+
+    const loader = new GLTFLoader();
+
+    // Delay the GLB load so the background shader renders a few frames first.
+    // On refresh the file is cached and the parse starts almost instantly —
+    // without this delay it blocks the main thread before the background has
+    // had time to paint even one frame.
+    function startGLBLoad() {
+      loader.load('assets/phone.glb', (gltf) => {
+      const model = gltf.scene;
+
+      // Center model
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.sub(center);
+      scene.add(model);
+
+      // Traverse all meshes and tune materials for realism
+      model.traverse(obj => {
+        if (!obj.isMesh) return;
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach(mat => {
+          if (!mat.isMeshStandardMaterial) return;
+          const name = obj.name.toLowerCase();
+
+          if (name.includes('screen') || name.includes('phone_screen')) {
+            // Screen — very glossy glass
+            mat.roughness = 0.0;
+            mat.metalness = 0.1;
+          } else if (name.includes('keyboard') || name.includes('button') || name.includes('key')) {
+            // Keyboard — soft rubber, low reflectivity
+            mat.roughness = 0.85;
+            mat.metalness = 0.0;
+          } else if (name.includes('main') || name.includes('body') || name.includes('frame')) {
+            // Phone body — soft plastic with slight sheen
+            mat.roughness = 0.6;
+            mat.metalness = 0.1;
+          } else {
+            // Everything else — default slightly reflective
+            mat.roughness = 0.5;
+            mat.metalness = 0.05;
+          }
+          mat.needsUpdate = true;
+        });
+      });
+
+      // Auto-fit camera accounting for aspect ratio
+      const size = box.getSize(new THREE.Vector3());
+      const fovRad = camera.fov * (Math.PI / 180);
+
+      // Fit height, then also check if width needs more distance given aspect ratio
+      const distForHeight = (size.y / 2) / Math.tan(fovRad / 2);
+      const distForWidth  = (size.x / 2) / Math.tan(fovRad / 2) / camera.aspect;
+      let distance = Math.max(distForHeight, distForWidth);
+      distance *= 5; // camera pull-back multiplier — increase to move further away
+
+      // CAM_OFFSET_Y: move camera up (positive) or down (negative) without tilting.
+      // controls.target shifts by the same amount so the look direction stays level.
+      const CAM_OFFSET_Y = 0.03;
+
+      camera.position.set(0, CAM_OFFSET_Y, distance);
+      camera.near = distance / 100;
+      camera.far  = distance * 100;
+      camera.updateProjectionMatrix();
+
+      controls.target.set(0.005, -0.01 + CAM_OFFSET_Y, 0);
+      controls.update();
+
+      // Normal "facing camera" rotation (used after align animation)
+      const FACE_CAM_ROT = { x: Math.PI / 2 + 0.01, y: Math.PI / 2, z: 0 };
+
+      // Intro: vertical + ~80° tilt. Phone body axis is already rotated by x=PI/2,
+      // so rotate Z by -80° (CCW from camera view) and give a random Y start offset.
+      // Wrap model (and later keyboardGroup) in a shared spin group so both
+      // pieces rotate identically. Y spin lives on the group; model only holds
+      // the upright X tilt.
+      phoneSpinGroup = new THREE.Group();
+      phoneSpinGroup.rotation.order = 'YZX';
+      scene.remove(model);
+      phoneSpinGroup.add(model);
+      scene.add(phoneSpinGroup);
+
+      // Apply the upright orientation BEFORE recomputing the bounding box.
+      // The earlier centering (model.position.sub(center)) was done pre-rotation;
+      // if the Blender pivot isn't at the mesh's geometric center the Z-rotation
+      // will shift the visual center off the group's Y spin axis.
+      // Re-centering after rotation guarantees the spin pivot passes through the
+      // phone's actual visual center regardless of Blender pivot placement.
+      model.rotation.set(0, 0, Math.PI / 2); // upright — Y spin lives on phoneSpinGroup
+
+      // ── Spin-center calibration ────────────────────────────────────────────
+      // Set DEBUG_SPIN_CENTER = true to show a red pivot dot + axes in the scene.
+      // The red dot marks exactly where the spin axis is — it should sit in the
+      // middle of the phone body when spinning looks correct.
+      // Set back to false (or remove the helpers) once dialed in.
+      const DEBUG_SPIN_CENTER = false;
+
+      // SPIN_PIVOT_OFFSET_X / _Y: nudge the pivot left/right or up/down (world units).
+      // With DEBUG_SPIN_CENTER on you'll see the red dot move relative to the phone.
+      const SPIN_PIVOT_OFFSET_X = 0;
+      const SPIN_PIVOT_OFFSET_Y = 0.03;
+      const SPIN_PIVOT_OFFSET_Z = 0.08;
+
+      phoneSpinGroup.updateMatrixWorld(true);
+      const spinBox    = new THREE.Box3().setFromObject(model);
+      const spinCenter = spinBox.getCenter(new THREE.Vector3());
+      model.position.x -= spinCenter.x - SPIN_PIVOT_OFFSET_X;
+      model.position.y -= spinCenter.y - SPIN_PIVOT_OFFSET_Y;
+      model.position.z -= spinCenter.z - SPIN_PIVOT_OFFSET_Z;
+
+      if (DEBUG_SPIN_CENTER) {
+        // Red sphere at pivot (group local origin = spin axis)
+        const pivotMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.015, 12, 12),
+          new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false })
+        );
+        pivotMesh.renderOrder = 999;
+        phoneSpinGroup.add(pivotMesh); // sits at (0,0,0) in group space = pivot
+
+        // Axes lines so you can see X/Y/Z orientation
+        const axes = new THREE.AxesHelper(0.15);
+        axes.material.depthTest = false;
+        axes.renderOrder = 999;
+        phoneSpinGroup.add(axes);
+
+        // Wireframe box showing the model's bounding box after centering
+        phoneSpinGroup.updateMatrixWorld(true);
+        const debugBox     = new THREE.Box3().setFromObject(model);
+        const boxHelper    = new THREE.Box3Helper(debugBox, 0xffff00);
+        scene.add(boxHelper);
+      }
+      // ── / Spin-center calibration ──────────────────────────────────────────
+
+      phoneSpinGroup.rotation.y = Math.PI * 0.5; // initial spin offset
+      introSpinY = Math.PI * 0.5;               // keep introSpinY in sync
+
+      window._FACE_CAM_ROT = FACE_CAM_ROT;
+
+      // Dedicated glow point light for hover pulse
+      introGlowLight             = new THREE.PointLight(0x88aaff, 0, 1.5);
+      introGlowLight.position.set(0, 0, 0.3);
+      scene.add(introGlowLight);
+
+      // "click to begin" text is revealed via showPhone() after the warm-up delay
+
+      if (INSPECT_MODE) {
+        // Skip intro entirely — jump straight to free-orbit inspection
+        introPhase       = 'done';
+        controls.enabled = true;
+      }
+
+      window._phoneModel = model;
+
+      // Apply sine wave shader texture to phone_screen mesh
+      const phoneScreenMesh = model.getObjectByName('phone_screen');
+      if (phoneScreenMesh) {
+        // Force a basic material first to confirm mesh renders
+        // Material used when screen is active (video / password / home)
+        const screenOnMaterial = new THREE.MeshBasicMaterial({
+          map:  screenTexture,
+          side: THREE.DoubleSide,
+        });
+
+        // Material used during intro spin — black glass that reacts to scene lights.
+        // No clearcoat (double-specular makes grey env pop too much).
+        // Slight dark-blue tint so neutral env samples read as dark glass, not grey.
+        // Low envMapIntensity so scene point lights dominate over the grey HDR background.
+        const screenOffMaterial = new THREE.MeshPhysicalMaterial({
+          color:            0x05080f,  // near-black with a hint of blue
+          roughness:        0.0,
+          metalness:        0.5,       // semi-metallic → coloured specular, not flat grey
+          reflectivity:     1.0,
+          clearcoat:        0.0,
+          side:             THREE.DoubleSide,
+        });
+        // Give it the HDR env map if already loaded, otherwise scene.environment handles it
+        if (scene.environment) {
+          screenOffMaterial.envMap          = scene.environment;
+          screenOffMaterial.envMapIntensity = 0.35; // low so grey areas don't dominate
+        }
+
+        // Start in off state (intro spin)
+        phoneScreenMesh.material = screenOffMaterial;
+        phoneScreenMesh.material.needsUpdate = true;
+        phoneScreenMesh.visible = true;
+
+        window._screenOnMaterial  = screenOnMaterial;
+        window._screenOffMaterial = screenOffMaterial;
+        window._phoneScreenMesh   = phoneScreenMesh;
+
+        // Position glow light at screen center, slightly in front of it
+        const screenBox    = new THREE.Box3().setFromObject(phoneScreenMesh);
+        const screenCenter = screenBox.getCenter(new THREE.Vector3());
+        screenGlowLight.position.copy(screenCenter);
+        screenGlowLight.position.z += 0.05;
+        screenGlowLight.intensity   = 0; // off until video plays
+      } else {
+        console.warn('Screen shader: phone_screen mesh not found.');
+      }
+
+      // Find keyboard parts
+      const keyboard1 = model.getObjectByName('keyboard1');
+      const keyboard2 = model.getObjectByName('keyboard2');
+      const buttons1  = model.getObjectByName('buttons1');
+
+      if (!keyboard1 && !keyboard2 && !buttons1) {
+        console.warn('Keyboard slide: no keyboard parts found by name.');
+      }
+
+      // Group them so they move together
+      keyboardGroup = new THREE.Group();
+      phoneSpinGroup.add(keyboardGroup);
+      if (keyboard1) keyboardGroup.attach(keyboard1);
+      if (keyboard2) keyboardGroup.attach(keyboard2);
+      if (buttons1)  keyboardGroup.attach(buttons1);
+      keyboardGroup.visible = true; // debug: hidden to isolate vertex fragments
+
+      // Attach tempmesh to the main model group (non-keyboard body)
+      const tempmesh = model.getObjectByName('tempmesh');
+      if (tempmesh) {
+        model.attach(tempmesh);
+        tempmesh.visible = false; // debug: hidden to check if this is the floating line
+      } else {
+        console.warn('tempmesh not found in GLB — check the mesh name in Blender.');
+      }
+
+      // Measure slide distance from screen bounding box
+      const screenMesh = model.getObjectByName('phone_screen');
+      let slideDistance = 0.08;
+      if (screenMesh) {
+        const screenBox  = new THREE.Box3().setFromObject(screenMesh);
+        const screenSize = screenBox.getSize(new THREE.Vector3());
+        slideDistance    = screenSize.y * 1.1;
+      }
+
+      // Keyboard starts hidden inside phone body (natural Blender position).
+      // Slides out in local +X direction which maps to world -Y (down) after the 90° Z rotation.
+      keyboardGroup.position.y = 0;
+      keyboardGroup.position.z = -0.173; // natural hidden position — slides in +Z (world down)
+      keyboardGroup.position.x = -0.007;
+      window._keyboardSlideDistance = slideDistance; // expose for triggerKeyboardSlide
+
+
+
+      // ── Mesh isolation — hide one at a time to find the floating line ────
+      // Flip each to false one at a time, reload, and check if line disappears
+      model.getObjectByName('SlidingPhone_01_SlidingPhone_01_Buttons_0').visible  = true;
+      model.getObjectByName('SlidingPhone_01_SlidingPhone_01_Buttons_0001').visible = true;
+      model.getObjectByName('SlidingPhone_01_SlidingPhone_01_Main_0').visible     = true;
+      // ── / Mesh isolation ─────────────────────────────────────────────────
+    });
+
+    // ── Intro hover / click ─────────────────────────────────────────────────
+    renderer.domElement.addEventListener('mousemove', (e) => {
+      if (introPhase !== 'spin' || !window._phoneModel) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mx   = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+      const my   = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+      const hoverRaycaster = new THREE.Raycaster();
+      hoverRaycaster.setFromCamera(new THREE.Vector2(mx, my), camera);
+      const meshes = [];
+      window._phoneModel.traverse(o => { if (o.isMesh) meshes.push(o); });
+      introHover = hoverRaycaster.intersectObjects(meshes, true).length > 0;
+    });
+
+    renderer.domElement.addEventListener('mouseleave', () => { introHover = false; });
+
+    renderer.domElement.addEventListener('click', (e) => {
+      if (INSPECT_MODE) return; // orbit drag active — ignore intro click
+      if (introPhase !== 'spin' || !window._phoneModel) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mx   = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+      const my   = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+      const clickRaycaster = new THREE.Raycaster();
+	      clickRaycaster.setFromCamera(new THREE.Vector2(mx, my), camera);
+	      const meshes = [];
+	      window._phoneModel.traverse(o => { if (o.isMesh) meshes.push(o); });
+	      if (clickRaycaster.intersectObjects(meshes, true).length === 0) return;
+	      phoneClickAudio.currentTime = 0;
+	      phoneClickAudio.play();
+	      startPhoneRotateAudio(phoneRotateAudio);
+
+	      // Begin align phase (material stays as glass until video starts)
+	      introPhase      = 'align';
+      introHover      = false;
+      introAlignStart = null;
+      {
+        // Find the nearest equivalent of the face-cam angle to introSpinY so the
+        // phone always takes the shortest arc (forward if nearly done, backward if just started)
+        const rawTarget = window._FACE_CAM_ROT.y;
+        const N = Math.round((introSpinY - rawTarget) / (Math.PI * 2));
+        introAlignFrom  = {
+          y:          phoneSpinGroup ? phoneSpinGroup.rotation.y : introSpinY,
+          bobY:       phoneSpinGroup ? phoneSpinGroup.position.y : 0,
+          adjustedToY: rawTarget + N * Math.PI * 2,
+        };
+      }
+
+      // Hide "click to begin" text
+      const ctb = document.getElementById('click-to-begin');
+      if (ctb) { ctb.classList.remove('visible'); ctb.classList.add('hidden'); }
+    });
+    // ── / Intro hover / click ───────────────────────────────────────────────
+
+    const resizeObserver = new ResizeObserver(() => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h; // container aspect — keeps phone the same size
+      camera.updateProjectionMatrix();
+      renderer.setSize(Math.round(w * CANVAS_PAD), Math.round(h * CANVAS_PAD));
+    });
+    resizeObserver.observe(container);
+
+    function openSubNav(type) {
+      subNavOpen      = true;
+      subNavType      = type;
+      subNavActiveIdx = 0;
+
+      // Init per-icon glow scales and sizes (first item active)
+      const n = SUB_NAVS[type].length;
+      subNavGlowScales = Array.from({length: n}, (_, i) => i === 0 ? 1 : 0);
+      subNavSizes      = Array.from({length: n}, (_, i) => i === 0 ? 68 : 36);
+
+      navSlideFrom  = 0;
+      navSlideTo    = -(compCanvas.height * 0.6);
+      navSlideY     = 0;
+      navSlideAnim  = true;
+      navSlideStart = null;
+
+      titleFloat      = 0;
+      titleSlideY     = 25;
+      titleFloatAnim  = true;
+      titleFloatStart = null;
+
+      window._subNavOpen      = true;
+      window._subNavType      = type;
+      window._subNavActiveIdx = 0;
+    }
+
+    function closeSubNav() {
+      if (subNavType === 'projects' || subNavType === 'socials') {
+        window._playUiSound?.('leave');
+      }
+
+      subNavOpen = false;
+      // subNavType intentionally kept non-null so drawSubNav can animate out;
+      // it gets cleared when the navSlide animation finishes (see animate loop).
+
+      navSlideFrom  = -(compCanvas.height * 0.6);
+      navSlideTo    = 0;
+      navSlideY     = navSlideFrom;
+      navSlideAnim  = true;
+      navSlideStart = null;
+
+      titleFloat      = 1;
+      titleSlideY     = 0;
+      titleFloatAnim  = true;
+      titleFloatStart = null;
+
+      // Fade main nav icons back in (needed if coming back from frozen state)
+      iconFadeDir       = 1;
+      iconFadeStart     = performance.now();
+      iconFadeAnimating = true;
+
+      window._subNavOpen = false;
+      window._subNavType = null;
+    }
+
+    function shiftSubNav(dir) {
+      if (!subNavOpen || !subNavType) return;
+      const items = SUB_NAVS[subNavType];
+      const nextIdx = Math.max(0, Math.min(items.length - 1, subNavActiveIdx + dir));
+      if (nextIdx === subNavActiveIdx) return;
+      subNavActiveIdx = nextIdx;
+      window._playUiSound?.('tick');
+      window._subNavActiveIdx = subNavActiveIdx;
+      // subNavGlowScales and subNavSizes lerp toward new targets in the animate loop
+    }
+
+    function selectSubNav() {
+      if (!subNavOpen || !subNavType) return;
+      const item = SUB_NAVS[subNavType][subNavActiveIdx];
+
+      if (subNavType === 'socials') {
+        const urls = {
+          github:   'https://github.com/aikoblisss',
+          linkedin: 'https://www.linkedin.com/in/branden-greene',
+        };
+        if (urls[item.name]) window.open(urls[item.name], '_blank');
+      } else if (subNavType === 'projects') {
+        if (item.name === 'charitystream' || item.name === 'metaclips' || item.name === 'trails') {
+          // Freeze sub-nav in place — fade icons out, keep nav slid up, restore on zoom-out
+          subNavFrozen        = true;
+          subNavOpen          = false;
+          window._subNavOpen  = false;
+          subNavAlphaDir      = -1;
+          subNavAlphaStart    = null;
+          subNavAlphaAnim     = true;
+          if (window._startZoomIn) window._startZoomIn(item.name);
+        }
+      }
+    }
+
+    window._openSubNav   = openSubNav;
+    window._closeSubNav  = closeSubNav;
+    window._shiftSubNav  = shiftSubNav;
+    window._selectSubNav = selectSubNav;
+
+    window._dismissComingSoon = function() {
+      if (!comingSoonVisible) return;
+      comingSoonDir       = -1;
+      comingSoonAnimStart = null;
+      comingSoonAnim      = true;
+      window._comingSoonOpen = false;
+    };
+
+    let currentZoomTab = null;
+
+    function startZoomIn(tabName) {
+      if (isZoomedIn || isZoomAnimating || !window._phoneScreenMesh) return;
+
+      savedCamPos.copy(camera.position);
+      savedCamTarget.copy(controls.target);
+
+      controls.enabled = false;
+      if (window._setFloatAnimation) window._setFloatAnimation(false);
+
+      // Fade icons out
+      iconFadeDir       = -1;
+      iconFadeStart     = performance.now();
+      iconFadeAnimating = true;
+
+      const screenBox    = new THREE.Box3().setFromObject(window._phoneScreenMesh);
+      const screenCenter = screenBox.getCenter(new THREE.Vector3());
+      const screenSize   = screenBox.getSize(new THREE.Vector3());
+
+      const fovRad   = camera.fov * (Math.PI / 180);
+      const fitDistH = (screenSize.y / 2) / Math.tan(fovRad / 2);
+      const fitDistW = (screenSize.x / 2) / Math.tan(fovRad / 2) / camera.aspect;
+      const fitDist  = Math.max(fitDistH, fitDistW) * 0.55;
+
+      zoomStartPos.copy(camera.position);
+      zoomStartTarget.copy(controls.target);
+      zoomEndPos.set(screenCenter.x, screenCenter.y, screenCenter.z + fitDist);
+      zoomEndTarget.copy(screenCenter);
+
+      if (tabName === 'about' || tabName === 'skills' || tabName === 'charitystream' || tabName === 'metaclips' || tabName === 'trails') {
+        window._playUiSound?.('enter');
+      }
+
+      isZoomAnimating        = true;
+      zoomAnimStart          = null;
+      window._pendingZoomTab = tabName;
+    }
+
+    function startZoomOut() {
+      if (!isZoomedIn || isZoomAnimating) return;
+
+      if (currentZoomTab === 'about' || currentZoomTab === 'skills' || currentZoomTab === 'charitystream' || currentZoomTab === 'metaclips' || currentZoomTab === 'trails') {
+        window._playUiSound?.('exit');
+      }
+
+      window.dispatchEvent(new CustomEvent('zoom-content-hide'));
+
+      zoomStartPos.copy(camera.position);
+      zoomStartTarget.copy(controls.target);
+      zoomEndPos.copy(savedCamPos);
+      zoomEndTarget.copy(savedCamTarget);
+
+      isZoomedIn      = false;
+      isZoomAnimating = true;
+      zoomAnimStart   = null;
+    }
+
+    // Easing for intro align
+    const INTRO_EASE = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // ── Intro spin / align animation ──────────────────────────────────────
+      if (window._phoneModel && introPhase !== 'done' && !INSPECT_MODE) {
+        if (introPhase === 'spin') {
+          // Lerp spin speed toward target
+          const targetSpeed = introHover ? SPIN_FAST : SPIN_SLOW;
+          spinSpeed += (targetSpeed - spinSpeed) * 0.06;
+          introSpinY += spinSpeed;
+          if (phoneSpinGroup) phoneSpinGroup.rotation.y = introSpinY;
+
+          // Gentle bob — amplitude and speed tunable below
+          const BOB_AMPLITUDE = 0.02; // world units up/down
+          const BOB_SPEED     = 0.2;  // cycles per second (higher = faster bob)
+          if (phoneSpinGroup) {
+            phoneSpinGroup.position.y = Math.sin(performance.now() / 1000 * BOB_SPEED * Math.PI * 2) * BOB_AMPLITUDE;
+          }
+
+          // Lerp hover glow
+          introGlowTarget = introHover ? 1 : 0;
+          if (introGlowLight) {
+            introGlowLight.intensity += (introGlowTarget * 2.5 - introGlowLight.intensity) * 0.08;
+          }
+	        } else if (introPhase === 'align') {
+	          if (!introAlignStart) introAlignStart = performance.now();
+	          const t     = Math.min((performance.now() - introAlignStart) / ALIGN_DURATION, 1);
+	          const eased = INTRO_EASE(t);
+	          updatePhoneRotateAudio(t, ALIGN_DURATION);
+
+	          // Continue natural spin deceleration — no discontinuity from the spin phase
+	          spinSpeed  *= 0.94;
+          introSpinY += spinSpeed;
+
+          const toY = introAlignFrom.adjustedToY; // nearest equivalent of face-cam angle
+
+          if (phoneSpinGroup) {
+            // Blend: natural decelerated spin (t=0) → face-cam angle (t=1)
+            // introSpinY keeps advancing naturally so there's zero velocity snap at click
+            phoneSpinGroup.rotation.y = introSpinY * (1 - eased) + toY * eased;
+
+            // Ease bob from its value at click time back to zero
+            phoneSpinGroup.position.y = introAlignFrom.bobY * (1 - eased);
+          }
+
+          // Fade glow out
+          if (introGlowLight) introGlowLight.intensity *= 0.93;
+
+	          if (t >= 1) {
+	            stopPhoneRotateAudio();
+	            if (phoneSpinGroup) phoneSpinGroup.rotation.y = window._FACE_CAM_ROT.y;
+	            introPhase = 'done';
+            if (introGlowLight) { scene.remove(introGlowLight); introGlowLight = null; }
+
+            // Switch screen from glass to canvas material, then fade in
+            if (window._phoneScreenMesh && window._screenOnMaterial) {
+              window._phoneScreenMesh.material = window._screenOnMaterial;
+              window._phoneScreenMesh.material.needsUpdate = true;
+            }
+            window._videoFadeAlpha = 1.0; // start opaque black, fade to clear
+
+            // Play intro video on screen (keyboard slide happens after video ends)
+            setScreenState('video');
+            welcomeVideo.currentTime = 0;
+            window._videoStopped     = false; // reset early-stop guard
+            welcomeVideo.play();
+            // Ramp up screen glow during video
+            window._videoGlowTarget = 1;
+            // Capture camera position so we can zoom in over first 2s of video
+            window._videoCamStartZ    = camera.position.z;
+            window._videoCamZoomStart = null; // set on first animate frame so timing is accurate
+            window._videoCamZooming   = true;
+            introAudio.currentTime = 0;
+            introAudio.play();
+          }
+        }
+      }
+      // ── / Intro spin / align animation ───────────────────────────────────
+
+      // Keyboard slide animation
+	      if (keyboardAnimating) {
+	        if (!keyboardAnimStart) keyboardAnimStart = performance.now();
+	        const elapsed = performance.now() - keyboardAnimStart;
+	        const t       = Math.min(elapsed / KEYBOARD_DURATION, 1);
+	        const eased   = KEYBOARD_EASING(t);
+	        keyboardGroup.position.z = keyboardStartY + (keyboardTargetY - keyboardStartY) * eased;
+
+	        if (t >= 1) {
+	          keyboardGroup.position.z = keyboardTargetY;
+	          clickAudio.currentTime = 0;
+	          clickAudio.play();
+	          keyboardAnimating        = false;
+	          controls.enabled         = true;
+	          if (screenState === 'rotating' || screenState === 'video') {
+            window._passwordUIAlpha = 0; // password UI fades in from zero
+            setScreenState('password');
+          }
+        }
+      }
+
+      // ── Video fade-in / fade-out ─────────────────────────────────────────────
+      const VIDEO_FADE_SPEED = 0.035; // alpha change per frame (~0.6s at 60fps)
+      if (window._videoFadingOut) {
+        // Fade out: ramp alpha 0 → 1, then trigger rotation
+        window._videoFadeAlpha = Math.min((window._videoFadeAlpha ?? 0) + VIDEO_FADE_SPEED, 1);
+        if (window._videoFadeAlpha >= 1) {
+          window._videoFadingOut = false;
+          _triggerPostVideoRotation();
+        }
+      } else if ((window._videoFadeAlpha ?? 0) > 0 && screenState === 'video'
+                 && !window._videoFadeComplete) {
+        // Fade in: ramp alpha 1 → 0 (only on initial video play, not after fade-out)
+        window._videoFadeAlpha = Math.max(window._videoFadeAlpha - VIDEO_FADE_SPEED, 0);
+      }
+
+      // Shader background fades in during rotation phase
+      if (screenState === 'rotating') {
+        window._bgFadeAlpha = Math.min((window._bgFadeAlpha ?? 0) + 0.008, 1);
+      }
+
+      // Password UI fades in after keyboard slide completes
+      if (screenState === 'password' || screenState === 'wrong') {
+        window._passwordUIAlpha = Math.min((window._passwordUIAlpha ?? 0) + 0.03, 1);
+      }
+      // ── / Video fade ──────────────────────────────────────────────────────────
+
+      // ── Video zoom — camera pulls in over first 2s of welcome.mp4 ─────────
+      if (window._videoCamZooming) {
+        // ── Video zoom tuning ──────────────────────────────────────────────
+        const VIDEO_ZOOM_DURATION = 2000; // ms — how long the zoom takes
+        const VIDEO_CAM_ZOOM      = 0.9;  // Z multiplier at zoom end (0.9 = 10% closer)
+        // ── / Video zoom tuning ────────────────────────────────────────────
+        if (!window._videoCamZoomStart) window._videoCamZoomStart = performance.now();
+        const vt     = Math.min((performance.now() - window._videoCamZoomStart) / VIDEO_ZOOM_DURATION, 1);
+        const veased = KEYBOARD_EASING(vt);
+        camera.position.z = window._videoCamStartZ + (window._videoCamStartZ * VIDEO_CAM_ZOOM - window._videoCamStartZ) * veased;
+        if (vt >= 1) window._videoCamZooming = false; // zoom complete, hold position
+      }
+
+      // ── Intro Z rotation — portrait → landscape after welcome video ends ─
+      if (introZRotAnim && phoneSpinGroup && window._zRotStartQuat && window._zRotEndQuat) {
+        if (!introZRotStart) {
+          introZRotStart = performance.now();
+          // Capture camera and target start positions
+          window._zRotCamStart    = camera.position.clone();
+          window._zRotTargetStart = controls.target.clone();
+
+          // ── Rotation camera tuning ────────────────────────────────────────
+          const CAM_ZOOM  = 0.75; // Z multiplier (0.75 = 25% closer)
+          const CAM_DOWN  = 0.085;  // world units down  (positive = down)
+          const CAM_RIGHT = 0.042;  // world units right (positive = right)
+          // ── / Rotation camera tuning ──────────────────────────────────────
+
+          // Camera end position
+          window._zRotCamEnd = new THREE.Vector3(
+            camera.position.x + CAM_RIGHT,
+            camera.position.y - CAM_DOWN,
+            camera.position.z * CAM_ZOOM
+          );
+          // Target shifts by the same X/Y delta so look direction stays constant
+          window._zRotTargetEnd = new THREE.Vector3(
+            controls.target.x + CAM_RIGHT,
+            controls.target.y - CAM_DOWN,
+            controls.target.z
+          );
+	        }
+	        const t     = Math.min((performance.now() - introZRotStart) / INTRO_Z_ROT_DURATION, 1);
+	        const eased = KEYBOARD_EASING(t);
+	        updatePhoneRotateAudio(t, INTRO_Z_ROT_DURATION);
+	        const q     = new THREE.Quaternion();
+        q.slerpQuaternions(window._zRotStartQuat, window._zRotEndQuat, eased);
+        phoneSpinGroup.setRotationFromQuaternion(q);
+        camera.position.lerpVectors(window._zRotCamStart, window._zRotCamEnd, eased);
+        controls.target.lerpVectors(window._zRotTargetStart, window._zRotTargetEnd, eased);
+        controls.update();
+	        if (t >= 1) {
+	          stopPhoneRotateAudio();
+	          phoneSpinGroup.setRotationFromQuaternion(window._zRotEndQuat);
+	          camera.position.copy(window._zRotCamEnd);
+          controls.target.copy(window._zRotTargetEnd);
+          controls.update();
+          introZRotAnim = false;
+          window._startAmbienceLoop?.();
+          triggerKeyboardSlide();
+        }
+      }
+
+      // Nav slide animation
+      if (navSlideAnim) {
+        if (!navSlideStart) navSlideStart = performance.now();
+        const t     = Math.min((performance.now() - navSlideStart) / NAV_SLIDE_DURATION, 1);
+        const eased = ZOOM_EASE(t);
+        navSlideY   = navSlideFrom + (navSlideTo - navSlideFrom) * eased;
+        if (t >= 1) {
+          navSlideY    = navSlideTo;
+          navSlideAnim = false;
+          // If we just finished sliding back to home, clear sub-nav type now
+          if (navSlideTo === 0) {
+            subNavType         = null;
+            window._subNavType = null;
+          }
+        }
+      }
+
+      // Sub-nav alpha fade animation
+      if (subNavAlphaAnim) {
+        if (!subNavAlphaStart) subNavAlphaStart = performance.now();
+        const t     = Math.min((performance.now() - subNavAlphaStart) / SUBNAV_FADE_DURATION, 1);
+        const eased = ZOOM_EASE(t);
+        subNavAlpha = subNavAlphaDir === -1 ? 1 - eased : eased;
+        if (t >= 1) {
+          subNavAlpha     = subNavAlphaDir === -1 ? 0 : 1;
+          subNavAlphaAnim = false;
+        }
+      }
+
+      // Glow slide animation
+      // Animate per-icon glow scales and sizes
+      for (let i = 0; i < subNavGlowScales.length; i++) {
+        const glowTarget = i === subNavActiveIdx ? 1 : 0;
+        subNavGlowScales[i] += (glowTarget - subNavGlowScales[i]) * GLOW_LERP;
+      }
+      for (let i = 0; i < subNavSizes.length; i++) {
+        const sizeTarget = i === subNavActiveIdx ? 68 : 36;
+        subNavSizes[i] += (sizeTarget - subNavSizes[i]) * SIZE_LERP;
+      }
+
+      // Coming soon fade animation
+      if (comingSoonAnim) {
+        if (!comingSoonAnimStart) comingSoonAnimStart = performance.now();
+        const t     = Math.min((performance.now() - comingSoonAnimStart) / COMING_SOON_DURATION, 1);
+        const eased = ZOOM_EASE(t);
+        comingSoonAlpha = comingSoonDir === 1 ? eased : 1 - eased;
+        if (t >= 1) {
+          comingSoonAlpha = comingSoonDir === 1 ? 1 : 0;
+          comingSoonAnim  = false;
+          if (comingSoonDir === -1) comingSoonVisible = false;
+        }
+      }
+
+      // Title float animation
+      if (titleFloatAnim) {
+        if (!titleFloatStart) titleFloatStart = performance.now();
+        const t     = Math.min((performance.now() - titleFloatStart) / TITLE_FLOAT_DURATION, 1);
+        const eased = ZOOM_EASE(t);
+        titleFloat  = subNavOpen ? eased       : 1 - eased;
+        titleSlideY = subNavOpen ? (1-eased)*25 : eased*25;
+        if (t >= 1) {
+          titleSlideY    = subNavOpen ? 0 : 25;
+          titleFloatAnim = false;
+        }
+      }
+
+      // Icon fade animation
+      if (iconFadeAnimating) {
+        const t     = Math.min((performance.now() - iconFadeStart) / ICON_FADE_DURATION, 1);
+        const eased = ZOOM_EASE(t);
+        if (iconFadeDir === -1) {
+          iconFadeAlpha   = 1 - eased;
+          iconFadeOffsetY = eased * ICON_FADE_SHIFT;
+        } else {
+          iconFadeAlpha   = eased;
+          iconFadeOffsetY = (1 - eased) * ICON_FADE_SHIFT;
+        }
+        if (t >= 1) {
+          iconFadeAnimating = false;
+          iconFadeAlpha     = iconFadeDir === -1 ? 0 : 1;
+          iconFadeOffsetY   = iconFadeDir === -1 ? ICON_FADE_SHIFT : 0;
+        }
+      }
+
+      // Check screen visibility every frame
+      screenFacingCamera         = isScreenFacingCamera();
+      window._screenFacingCamera = screenFacingCamera;
+
+      // Update screen shader texture every frame
+      renderScreenShader();
+
+      // Keep screen glow light synced to screen mesh world position
+      if (window._screenGlowLight && window._phoneScreenMesh) {
+        const sBox = new THREE.Box3().setFromObject(window._phoneScreenMesh);
+        const sCenter = sBox.getCenter(new THREE.Vector3());
+        window._screenGlowLight.position.copy(sCenter);
+        window._screenGlowLight.position.z += 0.05;
+
+        // Animate video glow intensity
+        if (typeof window._videoGlowTarget === 'number') {
+          const targetIntensity = window._videoGlowTarget * 6;
+          window._screenGlowLight.intensity += (targetIntensity - window._screenGlowLight.intensity) * 0.05;
+        }
+      }
+
+      // Camera zoom animation
+      if (isZoomAnimating) {
+        if (!zoomAnimStart) zoomAnimStart = performance.now();
+        const t     = Math.min((performance.now() - zoomAnimStart) / ZOOM_DURATION, 1);
+        const eased = ZOOM_EASE(t);
+
+        camera.position.lerpVectors(zoomStartPos, zoomEndPos, eased);
+        controls.target.lerpVectors(zoomStartTarget, zoomEndTarget, eased);
+        camera.lookAt(controls.target);
+
+        if (t >= 1) {
+          isZoomAnimating = false;
+
+          if (window._pendingZoomTab) {
+            isZoomedIn = true;
+            currentZoomTab = window._pendingZoomTab;
+            window.dispatchEvent(new CustomEvent('zoom-content-show', {
+              detail: { tab: window._pendingZoomTab }
+            }));
+            window._pendingZoomTab = null;
+          } else if (subNavFrozen) {
+            // Coming back from a sub-nav project — restore sub-nav, don't show main nav
+            currentZoomTab       = null;
+            subNavFrozen        = false;
+            subNavOpen          = true;
+            window._subNavOpen  = true;
+            window._subNavType  = subNavType;
+            controls.enabled    = true;
+            // Fade sub-nav icons back in
+            subNavAlphaDir      = 1;
+            subNavAlphaStart    = null;
+            subNavAlphaAnim     = true;
+          } else {
+            currentZoomTab = null;
+            controls.enabled = true;
+            if (window._setFloatAnimation) window._setFloatAnimation(true);
+            // Fade icons back in
+            iconFadeDir       = 1;
+            iconFadeStart     = performance.now();
+            iconFadeAnimating = true;
+          }
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Signal to script.js that the module is ready to receive events
+    window._startZoomIn  = startZoomIn;
+    window._startZoomOut = startZoomOut;
+    window._isZoomedIn   = () => isZoomedIn;
+
+    // Warm up the GPU for a few frames while the phone container is still invisible.
+    // This lets the driver compile shaders and upload buffers before the fade-in,
+    // eliminating the lag spike on first reveal.
+    const WARMUP_FRAMES = 45; // ~750ms at 60fps — enough for shader compile + texture uploads
+    let warmupCount = 0;
+    function warmupTick() {
+      if (++warmupCount < WARMUP_FRAMES) {
+        requestAnimationFrame(warmupTick);
+      } else {
+        window._moduleReady = true;
+        window.dispatchEvent(new CustomEvent('module-ready'));
+      }
+    }
+    requestAnimationFrame(warmupTick);
+
+    // ── PASSWORD INPUT ────────────────────────────────────────────────────────
+    function submitPassword() {
+      if (passwordEntry === CORRECT_PASSWORD) {
+        setScreenState('logging-in'); // loading spinner → home after 2s
+      } else {
+        setScreenState('wrong');
+      }
+    }
+
+	    window._addPasswordChar = (char) => {
+	      if (screenState !== 'password') return;
+	      if (char === 'backspace') {
+	        window._playUiSound?.('delete');
+	        passwordEntry = passwordEntry.slice(0, -1);
+	      } else if (char === 'enter') {
+	        window._playUiSound?.('type');
+	        submitPassword();
+	      } else {
+	        window._playUiSound?.('type');
+	        passwordEntry += char;
+	      }
+	    };
+
+    Object.defineProperty(window, '_screenState', { get: () => screenState });
+
+    // ── KEYBOARD RAYCASTER ────────────────────────────────────────────────────
+    const KB_MIN_X = -0.3249, KB_MAX_X =  0.3272;
+    const KB_MIN_Y = -0.0064, KB_MAX_Y =  0.3287;
+
+    const KB_ROWS = [
+      { y: 0.75, keys: ['q','w','e','r','t','y','u','i','o','p'] },
+      { y: 0.50, keys: ['a','s','d','f','g','h','j','k','l']     },
+      { y: 0.25, keys: ['z','x','c','v','b','n','m']             },
+    ];
+
+    function worldPosToKey(wx, wy, wz) {
+      // KEY_MAP uses keyboardGroup local-space y (horizontal) and z (row depth)
+      // Calibrated 2026-04 from live coordinate logging
+      const KEY_MAP = [
+        // Row 1 (z ≈ 0.197)
+        { key: 'q', y: -0.1802, z: 0.1961 },
+        { key: 'w', y: -0.1353, z: 0.1969 },
+        { key: 'e', y: -0.0904, z: 0.1992 },
+        { key: 'r', y: -0.0424, z: 0.1977 },
+        { key: 't', y:  0.0033, z: 0.1985 },
+        { key: 'y', y:  0.0521, z: 0.1955 },
+        { key: 'u', y:  0.0979, z: 0.1964 },
+        { key: 'i', y:  0.1438, z: 0.1972 },
+        { key: 'o', y:  0.1928, z: 0.1996 },
+        { key: 'p', y:  0.2388, z: 0.1959 },
+        // Row 2 (z ≈ 0.240)
+        { key: 'a', y: -0.1551, z: 0.2387 },
+        { key: 's', y: -0.1072, z: 0.2403 },
+        { key: 'd', y: -0.0623, z: 0.2419 },
+        { key: 'f', y: -0.0189, z: 0.2374 },
+        { key: 'g', y:  0.0291, z: 0.2429 },
+        { key: 'h', y:  0.0734, z: 0.2415 },
+        { key: 'j', y:  0.1216, z: 0.2401 },
+        { key: 'k', y:  0.1684, z: 0.2411 },
+        { key: 'l', y:  0.2138, z: 0.2397 },
+        // Row 3 (z ≈ 0.285)
+        { key: 'z', y: -0.1652, z: 0.2889 },
+        { key: 'x', y: -0.1219, z: 0.2845 },
+        { key: 'c', y: -0.0747, z: 0.2870 },
+        { key: 'v', y: -0.0313, z: 0.2834 },
+        { key: 'b', y:  0.1033, z: 0.2878 },
+        { key: 'n', y:  0.1409, z: 0.2842 },
+        { key: 'm', y:  0.1901, z: 0.2805 },
+      ];
+
+      let closestKey  = null;
+      let closestDist = Infinity;
+
+      KEY_MAP.forEach(entry => {
+        const dy   = wy - entry.y;
+        const dz   = wz - entry.z;
+        const dist = Math.sqrt(dy * dy + dz * dz);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestKey  = entry.key;
+        }
+      });
+
+      if (closestDist > 0.040) return null;
+      return closestKey;
+    }
+
+    const raycaster  = new THREE.Raycaster();
+    const clickMouse = new THREE.Vector2();
+
+	    // Button hit zones — local coords relative to phone model root
+	    const BUTTON_ZONES = [
+	      { id: 'left',  x: -0.2894, y: 0.0625, z: -0.1635, radius: 0.028 },
+	      { id: 'right', x: -0.2131, y: 0.0625, z: -0.1620, radius: 0.028 },
+	      { id: 'ok',    x: -0.2536, y: 0.0624, z: -0.1630, radius: 0.034 },
+	      { id: 'ok',    x: -0.2515, y: 0.0624, z: -0.1612, radius: 0.034 },
+	      { id: 'ok',    x: -0.2460, y: 0.0624, z: -0.1612, radius: 0.026 },
+	      { id: 'up',    x: -0.2490, y: 0.0625, z: -0.2221, radius: 0.024 },
+	      { id: 'down',  x: -0.2515, y: 0.0625, z: -0.0993, radius: 0.024 },
+	    ];
+
+	    function getButtonHit(localPos) {
+	      for (const zone of BUTTON_ZONES) {
+	        const dx = localPos.x - zone.x;
+	        const dy = localPos.y - zone.y;
+	        const dz = localPos.z - zone.z;
+	        if (Math.sqrt(dx*dx + dy*dy + dz*dz) < zone.radius) return zone.id;
+	      }
+	      return null;
+	    }
+
+	    const KEYBOARD_BUTTON_ZONES = [
+	      { id: 'ok', x: -0.0094, y: 0.2523, z: 0.2849, radius: 0.026 },
+	      { id: 'ok', x: -0.0093, y: 0.2700, z: 0.2830, radius: 0.022 },
+	      { id: 'ok', x: -0.0094, y: 0.2346, z: 0.2868, radius: 0.022 },
+	      { id: 'backspace', x: -0.0094, y: 0.2582, z: 0.2431, radius: 0.024 },
+	    ];
+
+	    function getKeyboardButtonHit(localPos) {
+	      for (const zone of KEYBOARD_BUTTON_ZONES) {
+	        const dx = localPos.x - zone.x;
+	        const dy = localPos.y - zone.y;
+	        const dz = localPos.z - zone.z;
+	        if (Math.sqrt(dx*dx + dy*dy + dz*dz) < zone.radius) return zone.id;
+	      }
+	      return null;
+	    }
+
+	    const KEY_FOR_BUTTON = {
+	      backspace: 'Backspace',
+	      left: 'ArrowLeft',
+	      right: 'ArrowRight',
+	      up: 'ArrowUp',
+	      down: 'ArrowDown',
+	      ok: 'Enter',
+	    };
+
+    renderer.domElement.addEventListener('click', (e) => {
+      if (introPhase !== 'done') return; // handled by intro click listener
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      clickMouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+      clickMouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+      raycaster.setFromCamera(clickMouse, camera);
+
+	      if (window._phoneModel) {
+	        const modelMeshes = [];
+	        window._phoneModel.traverse(obj => { if (obj.isMesh) modelMeshes.push(obj); });
+	        const modelHits = raycaster.intersectObjects(modelMeshes, true);
+	        if (modelHits.length > 0) {
+	          const localHit = window._phoneModel.worldToLocal(modelHits[0].point.clone());
+
+	          if (window._screenFacingCamera) {
+	            const btn = getButtonHit(localHit);
+	            if (btn) {
+	              // Dispatch a synthetic key event so all existing state logic is reused
+	              document.dispatchEvent(new KeyboardEvent('keydown', { key: KEY_FOR_BUTTON[btn], bubbles: true }));
+	            }
+	          }
+	        }
+	      }
+
+	      if (keyboardGroup) {
+	        const keyboardMeshes = [];
+	        keyboardGroup.traverse(obj => { if (obj.isMesh) keyboardMeshes.push(obj); });
+	        const keyboardHits = raycaster.intersectObjects(keyboardMeshes, true);
+	        if (keyboardHits.length > 0) {
+	          const localHit = keyboardGroup.worldToLocal(keyboardHits[0].point.clone());
+
+	          const keyboardBtn = getKeyboardButtonHit(localHit);
+	          if (keyboardBtn) {
+	            document.dispatchEvent(new KeyboardEvent('keydown', { key: KEY_FOR_BUTTON[keyboardBtn], bubbles: true }));
+	          }
+	        }
+	      }
+
+	      // Password keyboard clicks (existing behaviour)
+	      if (screenState === 'password' && keyboardGroup) {
+        const meshes = [];
+        keyboardGroup.traverse(obj => { if (obj.isMesh) meshes.push(obj); });
+        const hits = raycaster.intersectObjects(meshes, true);
+        if (hits.length > 0) {
+          const localHit = keyboardGroup.worldToLocal(hits[0].point.clone());
+          const key = worldPosToKey(localHit.x, localHit.y, localHit.z);
+          if (key) window._addPasswordChar(key);
+        }
+      }
+    });
+
+    } // end startGLBLoad
+
+    setTimeout(startGLBLoad, 400);
+  </script>
+
+  <!-- ZOOM CONTENT OVERLAY — shown after camera zooms into screen -->
+  <div id="zoom-overlay">
+    <div class="content-page" id="page-about">
+      <div class="content-box">
+        <div class="content-text">
+          <p>I'm Branden, a data science and CS student at UC Santa Barbara maintaining a 3.9 GPA. I believe the best tech brings people together, and I build end-to-end to prove it. I shipped a creator monetization tool that uses ML to detect and clip the most engaging moments into ready-to-post content, virtual 360° trail tours that got hundreds of people outside exploring the Bay Area, and an ad platform that turned viewer attention into $5k+ for charity, pitched from scratch and backed by a UCSB microgrant. I'm looking for backend, data science, and AI/ML roles where moving fast is rewarded and ownership is real.</p>
+          <p>I believe, the most interesting engineers are interested in everything. Skating, playing drums, and gardening keep me curious, refreshed, and give me new ways to think through problems.</p>
+          <p>Feel free to reach out if there’s an opportunity to collaborate, for work, or to build something meaningful.</p>
+        </div>
+      </div>
+      <div class="content-side-imgs">
+        <img src="assets/me.jpeg" class="content-side-img" alt="" style="filter: invert(1);">
+        <img src="assets/ucsb.png" class="content-side-img" alt="">
+        <img src="assets/letters.png" class="content-side-img" alt="">
+      </div>
+    </div>
+
+    <div class="content-page" id="page-metaclips">
+      <div class="content-box content-box--wide">
+        <img src="assets/metaclips.jpeg" class="content-header-img" alt="Meta Clips">
+        <div class="content-text">
+          <h3>Meta Clips</h3>
+          <h4 class="metaclips-subtitle">Full Stack Engineer &amp; Creator</h4>
+          <p>Built an end-to-end content monetization tool that lets creators turn raw Twitch and Kick streams into platform-ready clips automatically. Rather than paying for an off-the-shelf editing service, built the processing pipeline from scratch with FFmpeg, keeping costs near zero. ML models detect highlight moments, auto-crop for each platform's aspect ratio, and queue content for publishing — so creators stay focused on creating, not editing. Tested with real small creators before open sourcing.</p>
+          <ul class="metaclips-points">
+            <li>Orchestrated the full ML and video processing pipeline using n8n, connecting highlight detection, auto-cropping, and social upload into a single automated flow</li>
+            <li>Integrated Google Gemini and Descript AI to analyze stream footage and identify high-engagement moments worth clipping</li>
+            <li>Built native extensions for Twitch and Kick so creators could trigger the pipeline without leaving their streaming environment</li>
+            <li>Automated video cropping and reformatting across aspect ratios for Instagram, TikTok, and YouTube Shorts in a single pass</li>
+          </ul>
+          <p class="metaclips-stack">n8n | Google Gemini | Descript AI | Opus Clips | Twitch Extension | Kick Extension | FFmpeg | Stripe</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-page" id="page-charitystream">
+      <div class="content-box content-box--wide">
+        <img src="assets/charitystream.png" class="content-header-img" alt="">
+        <div class="content-text">
+          <h4 class="charitystream-subtitle">Full Stack Engineer &amp; Creator</h4>
+          <p>Built and launched a platform that converts ad spend into charitable donations — advertisers set their own CPM, users voluntarily watch, and 100% of net revenue goes to a weekly verified nonprofit. Pitched the concept, landed a UCSB microgrant, recruited brands like Poppi as advertising partners, and grew to 50 concurrent active users and $5k+ raised for charity.</p>
+          <ul class="charitystream-points">
+            <li>Built a custom ad scheduling algorithm with minimum airtime guarantees, weighted CPM-tier rotation, and consecutive placement caps — ensuring fair distribution regardless of spend</li>
+            <li>Built a dynamic video playlist system using FFmpeg for video generation and Cloudflare R2 for storage, with cron jobs to automate weekly charity rotation and billing cycles</li>
+            <li>Implemented Stripe billing with a Neon (PostgreSQL) backend to track subscriptions, manage advertiser budgets, and handle revenue attribution per charity</li>
+            <li>Recruited advertisers and charities cold via email outreach and social media, closing partnerships with real brands before the platform hit scale</li>
+          </ul>
+          <p class="charitystream-stack">Node.js | PostgreSQL | Stripe | FFmpeg | Cloudflare R2 | Vercel | Neon | Cron Jobs</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-page" id="page-trails">
+      <div class="content-box content-box--wide">
+        <div class="content-text">
+          <img src="assets/trails.png" class="content-header-img" alt="Bay Area Trails">
+          <h3>Bay Area Trails</h3>
+          <h4 class="charitystream-subtitle">Full Stack Engineer — built with my brother</h4>
+          <p>A trail discovery app built to get people outside. Shipped to the App Store with 100+ downloads, featuring embedded 360° virtual tours so hikers can preview trails before committing. Built the full stack with my brother — from Mapbox offline maps to a Supabase backend with PostGIS for geo-queries.</p>
+          <ul class="charitystream-points">
+            <li>Built a trail recommendation system factoring distance, location, past hikes, and popularity using PostGIS spatial queries on a PostgreSQL backend</li>
+            <li>Integrated 360° virtual trail tours so users could scout routes before showing up</li>
+            <li>Implemented offline Mapbox maps so the app stays functional without cell service on the trail</li>
+            <li>Built hike time tracking and synced session data back to Supabase for personalized recommendations over time</li>
+          </ul>
+          <p class="charitystream-stack">React Native | Next.js | Supabase | PostgreSQL | PostGIS | Mapbox | OpenTrailMap | iOS</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-page" id="page-skills">
+      <div class="content-box content-box--wide">
+        <div class="skills-icons">
+          <img src="assets/docker.png" alt="Docker" class="skill-icon">
+          <img src="assets/aws.png" alt="AWS" class="skill-icon">
+          <img src="assets/python.png" alt="Python" class="skill-icon">
+          <img src="assets/react.png" alt="React" class="skill-icon">
+        </div>
+        <div class="content-text">
+          <h4>Core Languages</h4>
+          <p>Python, React/Next.js, SQL, C++</p>
+          <h4>ML/AI &amp; Data Science</h4>
+          <p>NumPy, pandas, scikit-learn, Matplotlib, OpenAI API, Prompt Engineering</p>
+          <h4>Dev Tools &amp; Cloud</h4>
+          <p>Docker, AWS, Git/GitHub, Jupyter</p>
+          <h4>AI Assistants</h4>
+          <p>Claude Code, Codex</p>
+          <h4>Productivity</h4>
+          <p>Excel, PowerPoint</p>
+          <h4>Creative</h4>
+          <p>FL Studio, Ableton</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
