@@ -7,8 +7,9 @@
   <title>Branden Greene</title>
 
   <link rel="stylesheet" href="style.css">
-  <!-- Preload the GLB so it's in the browser cache before Three.js requests it -->
+  <!-- Preload the GLB and HDRI so they're in the browser cache before Three.js requests them -->
   <link rel="preload" href="assets/phone.glb" as="fetch" crossorigin>
+  <link rel="preload" href="assets/studio_small_08_1k.hdr" as="fetch" crossorigin>
 
   <!-- ── THREE.JS IMPORT MAP ─────────────────────────────────────────────── -->
   <script type="importmap">
@@ -126,6 +127,7 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
     import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
     const container = document.getElementById('phone-3d-container');
@@ -184,7 +186,7 @@
     // HDR environment map for reflections
     const rgbeLoader = new RGBELoader();
     rgbeLoader.load(
-      'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_08_1k.hdr',
+      'assets/studio_small_08_1k.hdr',
       (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping;
 
@@ -1121,7 +1123,10 @@
     }
     // ── / OFFSCREEN SCREEN SHADER ─────────────────────────────────────────────
 
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.167.0/examples/jsm/libs/draco/');
     const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
 
     // Delay the GLB load so the background shader renders a few frames first.
     // On refresh the file is cached and the parse starts almost instantly —
