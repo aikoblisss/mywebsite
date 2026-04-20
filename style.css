@@ -200,7 +200,7 @@ body * {
 
 #click-to-begin-text {
   position: fixed;
-  bottom: 50px; /* pixels from bottom edge — decrease to move down, negative values push it off-screen */
+  bottom: 35px; /* pixels from bottom edge — decrease to move down, negative values push it off-screen */
   left: 50%;
   transform: translateX(-50%);
   color: rgba(255,255,255,0.75);
