@@ -1375,6 +1375,9 @@
       model.getObjectByName('SlidingPhone_01_SlidingPhone_01_Buttons_0001').visible = true;
       model.getObjectByName('SlidingPhone_01_SlidingPhone_01_Main_0').visible     = true;
       // ── / Mesh isolation ─────────────────────────────────────────────────
+
+      glbDone = true;
+      tryShowPhone();
     });
 
     // ── Intro hover / click ─────────────────────────────────────────────────
@@ -1948,17 +1951,26 @@
     window._startZoomOut = startZoomOut;
     window._isZoomedIn   = () => isZoomedIn;
 
-    // Warm up the GPU for a few frames while the phone container is still invisible.
-    // This lets the driver compile shaders and upload buffers before the fade-in,
-    // eliminating the lag spike on first reveal.
+    // Both the GPU warmup AND the GLB load must complete before revealing the phone.
+    // On a cached load the GLB is ready before warmup ends (no change in behaviour).
+    // On an uncached load the download takes longer than warmup, so without this gate
+    // the phone container would fade in showing an empty canvas and the model would pop in.
+    let warmupDone = false;
+    let glbDone    = false;
+    function tryShowPhone() {
+      if (!warmupDone || !glbDone) return;
+      window._moduleReady = true;
+      window.dispatchEvent(new CustomEvent('module-ready'));
+    }
+
     const WARMUP_FRAMES = 45; // ~750ms at 60fps — enough for shader compile + texture uploads
     let warmupCount = 0;
     function warmupTick() {
       if (++warmupCount < WARMUP_FRAMES) {
         requestAnimationFrame(warmupTick);
       } else {
-        window._moduleReady = true;
-        window.dispatchEvent(new CustomEvent('module-ready'));
+        warmupDone = true;
+        tryShowPhone();
       }
     }
     requestAnimationFrame(warmupTick);
